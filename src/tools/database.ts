@@ -4,6 +4,9 @@ import type { MCPTool } from '../types/mcp';
 import { logger } from '../utils/logger';
 import { AppIdSchema, QueryFilterSchema, RecordIdSchema, TableIdSchema, validateSchema } from '../utils/validation';
 
+const MAX_FETCH_ALL_ROWS = 5000;
+const FETCH_ALL_PAGE_SIZE = 1000;
+
 const QueryRecordsSchema = z.object({
   appId: AppIdSchema,
   tableId: TableIdSchema,
@@ -11,7 +14,20 @@ const QueryRecordsSchema = z.object({
   sort: z.record(z.enum(['ascending', 'descending'])).optional(),
   limit: z.number().min(1).max(1000).default(50),
   bookmark: z.string().optional(),
+  fields: z.array(z.string().min(1)).optional(),
+  fetchAll: z.boolean().default(false),
 });
+
+function pickFields(rows: Record<string, unknown>[], fields: string[]): Record<string, unknown>[] {
+  const keep = new Set(['_id', ...fields]);
+  return rows.map((row) => {
+    const picked: Record<string, unknown> = {};
+    for (const key of keep) {
+      if (key in row) picked[key] = row[key];
+    }
+    return picked;
+  });
+}
 
 const CreateRecordSchema = z.object({
   appId: AppIdSchema,
@@ -166,7 +182,7 @@ export const databaseTools: MCPTool[] = [
   {
     name: 'query_records',
     description:
-      'Query records with filtering, sorting, and pagination. Filters: equal (exact match), string (contains), fuzzy (approximate), range (numeric low/high), notEqual, empty, notEmpty. Example: query: {equal: {status: "active"}, range: {age: {low: 18, high: 65}}}. Use bookmark from response for next page. Related: get_row (single record), aggregate_data (analytics).',
+      'Query records with filtering, sorting, and pagination. Supports field selection (return only specified columns) and auto-pagination (fetchAll to get all matching rows in one call). Filters: equal, string, fuzzy, range, notEqual, empty, notEmpty. Always specify fields to reduce response size.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -187,14 +203,71 @@ export const databaseTools: MCPTool[] = [
           },
         },
         sort: { type: 'object', description: 'Sort: {fieldName: "ascending" | "descending"}' },
-        limit: { type: 'number', description: 'Max records (1-1000, default 50)' },
-        bookmark: { type: 'string', description: 'Pagination bookmark from previous response' },
+        limit: {
+          type: 'number',
+          description: 'Max records per page (1-1000, default 50). Ignored when fetchAll is true.',
+        },
+        bookmark: {
+          type: 'string',
+          description: 'Pagination bookmark from previous response. Ignored when fetchAll is true.',
+        },
+        fields: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'Columns to return (e.g. ["nom", "statut"]). _id is always included. Omit to return all columns.',
+        },
+        fetchAll: {
+          type: 'boolean',
+          description: `Auto-paginate to fetch all matching rows (max ${MAX_FETCH_ALL_ROWS}). Returns truncated: true if cap exceeded.`,
+        },
       },
       required: ['appId', 'tableId'],
     },
     async execute(args: unknown, client: BudibaseClient) {
       const validated = validateSchema(QueryRecordsSchema, args);
-      logger.info('Querying records', { appId: validated.appId, tableId: validated.tableId });
+      logger.info('Querying records', {
+        appId: validated.appId,
+        tableId: validated.tableId,
+        fetchAll: validated.fetchAll,
+        fields: validated.fields,
+      });
+
+      if (validated.fetchAll) {
+        const allRows: Record<string, unknown>[] = [];
+        let currentBookmark: string | undefined;
+        let truncated = false;
+        let hasMore = true;
+
+        while (hasMore) {
+          const page = await client.queryRecords(validated.appId, {
+            tableId: validated.tableId,
+            query: validated.query,
+            sort: validated.sort,
+            limit: FETCH_ALL_PAGE_SIZE,
+            bookmark: currentBookmark,
+          });
+
+          allRows.push(...page.data);
+          currentBookmark = page.bookmark;
+
+          if (allRows.length >= MAX_FETCH_ALL_ROWS) {
+            allRows.length = MAX_FETCH_ALL_ROWS;
+            truncated = true;
+            hasMore = false;
+          } else {
+            hasMore = page.hasNextPage;
+          }
+        }
+
+        const rows = validated.fields ? pickFields(allRows, validated.fields) : allRows;
+
+        return {
+          success: true,
+          data: { rows, totalRows: rows.length, truncated },
+          message: `Retrieved ${rows.length} records from ${validated.tableId}${truncated ? ` (truncated at ${MAX_FETCH_ALL_ROWS} — narrow your filters)` : ''}`,
+        };
+      }
 
       const result = await client.queryRecords(validated.appId, {
         tableId: validated.tableId,
@@ -204,14 +277,16 @@ export const databaseTools: MCPTool[] = [
         bookmark: validated.bookmark,
       });
 
+      const rows = validated.fields ? pickFields(result.data || [], validated.fields) : result.data || [];
+
       return {
         success: true,
         data: {
-          rows: result.data || [],
+          rows,
           hasNextPage: result.hasNextPage,
           bookmark: result.bookmark,
         },
-        message: `Retrieved ${result.data.length} records from ${validated.tableId}`,
+        message: `Retrieved ${rows.length} records from ${validated.tableId}`,
       };
     },
   },

@@ -180,8 +180,9 @@ Match user intent directly to tool. Read the domain reference before calling.
 
 | User Says | Tool | Domain |
 |-----------|------|--------|
-| "show me all...", "list...", "find..." | `query_records` | [queries](references/queries.md) |
-| "search for...", "filter by..." | `query_records` | [queries](references/queries.md) |
+| "show me all...", "list...", "find..." | `query_records` (with `fields`) | [queries](references/queries.md) |
+| "search for...", "filter by..." | `query_records` (with `fields`) | [queries](references/queries.md) |
+| "get all...", "export all...", "every..." | `query_records` (with `fetchAll` + `fields`) | [queries](references/queries.md) |
 | "how many...", "total...", "average..." | `aggregate_data` | [analytics](references/analytics.md) |
 | "add...", "create...", "insert..." | `create_record` | [records](references/records.md) |
 | "import...", "bulk add..." | `batch_create_records` | [records](references/records.md) |
@@ -197,6 +198,29 @@ Match user intent directly to tool. Read the domain reference before calling.
 | "saved queries...", "run query..." | `search_queries` / `execute_query` | [queries](references/queries.md) |
 
 For multiple records, always prefer batch tools over looping single-record tools.
+
+### Field Selection Rule
+
+**Always pass `fields` to `query_records`.** Check the table's knowledge file for available columns and only request those relevant to the task. This drastically reduces token usage.
+
+```
+1. Read knowledge/{app}/{table}.yaml → get schema fields
+2. Pick only fields the user needs (+ primaryDisplay for display)
+3. Pass fields: ["field1", "field2"] — _id is always included automatically
+4. Use fetchAll: true when the task needs complete data (analytics, exports, bulk ops)
+5. Use default pagination (no fetchAll) when browsing/previewing
+```
+
+Example — user asks "list all active dossiers":
+```json
+{
+  "appId": "klarc",
+  "tableId": "dossiers",
+  "query": { "equal": { "statut": "Actif" } },
+  "fields": ["nom", "statut"],
+  "fetchAll": true
+}
+```
 
 ## Domains (MECE)
 
@@ -285,7 +309,7 @@ When a tool call fails due to stale knowledge:
 ### Clean and Export Data
 ```
 1. Knowledge: resolve appId + tableId from knowledge
-2. query_records → fetch target records
+2. query_records → fetchAll: true, fields: [relevant columns]
 3. transform_records → apply formatting (trim, uppercase, dates)
 4. convert_data_format → export to csv/json/markdown
 ```
@@ -293,7 +317,7 @@ When a tool call fails due to stale knowledge:
 ### Bulk Update with Conditions
 ```
 1. Knowledge: resolve appId + tableId from knowledge
-2. query_records → find matching records (preview)
+2. query_records → fields: [primaryDisplay], fetchAll: true (preview count)
 3. Show user: "[N] records match. Will set [field] to [value]."
 4. bulk_query_and_process → operation: "update", updateData: {...}
 ```
@@ -301,7 +325,7 @@ When a tool call fails due to stale knowledge:
 ### Migrate Records Between Tables
 ```
 1. Knowledge: resolve source + target appId/tableId
-2. query_records → fetch from source table
+2. query_records → fetchAll: true, fields: [columns needed for target]
 3. transform_records → reshape fields if schemas differ
 4. batch_create_records → insert into target table
 5. (optional) batch_delete_records → remove from source after confirm

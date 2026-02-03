@@ -27,7 +27,9 @@ When in doubt, use `query_records`. It handles most cases.
 
 ## query_records
 
-Standard filtering with sort and pagination. Accepts app/table names or IDs.
+Standard filtering with sort, pagination, field selection, and auto-pagination. Accepts app/table names or IDs.
+
+**Always pass `fields`** to reduce token usage. `_id` is always included automatically.
 
 ```json
 {
@@ -37,11 +39,36 @@ Standard filtering with sort and pagination. Accepts app/table names or IDs.
     "equal": { "status": "active" },
     "notEmpty": { "email": true }
   },
+  "fields": ["name", "status", "email"],
   "sort": { "createdAt": "descending" },
-  "limit": 50,
-  "bookmark": "optional_pagination_token"
+  "limit": 50
 }
 ```
+
+### Fetch All Rows
+
+Use `fetchAll: true` to auto-paginate and get all matching rows in one call (max 5,000). Overrides `limit` and `bookmark`.
+
+```json
+{
+  "appId": "app_xxx",
+  "tableId": "ta_xxx",
+  "query": { "equal": { "status": "active" } },
+  "fields": ["name", "status"],
+  "fetchAll": true
+}
+```
+
+Response when fetchAll is used:
+```json
+{
+  "rows": [...],
+  "totalRows": 342,
+  "truncated": false
+}
+```
+
+If more than 5,000 rows match, `truncated: true` is returned — narrow your filters.
 
 ### Filter Types
 
@@ -74,8 +101,16 @@ Run a saved query with parameters.
 
 ## Pagination
 
-All query tools support pagination:
+Two modes:
+
+**Manual** (default): Pass `bookmark` from response to next call.
 ```
 Response: { rows: [...], hasNextPage: true, bookmark: "abc123" }
 ```
-Pass `bookmark` from response to next call to get next page. Max `limit`: 1000, default: 50.
+Max `limit`: 1000, default: 50.
+
+**Auto** (`fetchAll: true`): Fetches all pages internally, returns combined result.
+```
+Response: { rows: [...], totalRows: 342, truncated: false }
+```
+Max 5,000 rows. Use `fetchAll` for exports, analytics, bulk operations.
