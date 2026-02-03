@@ -8,10 +8,10 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 
 import { BudibaseClient } from './clients/budibase';
-import { tools } from './tools';
 import { resources } from './resources';
+import { tools } from './tools';
+import { BudibaseError, ErrorCodes, MCPError } from './utils/errors';
 import { logger } from './utils/logger';
-import { MCPError, ErrorCodes, BudibaseError } from './utils/errors';
 
 export class BudibaseMCPServer {
   private server: Server;
@@ -28,7 +28,7 @@ export class BudibaseMCPServer {
           tools: {},
           resources: {},
         },
-      }
+      },
     );
 
     this.budibaseClient = new BudibaseClient();
@@ -37,10 +37,10 @@ export class BudibaseMCPServer {
 
   private setupHandlers() {
     // List available tools
-    this.server.setRequestHandler(ListToolsRequestSchema, async () => {
+    this.server.setRequestHandler(ListToolsRequestSchema, () => {
       logger.debug('Listing available tools');
       return {
-        tools: tools.map(tool => ({
+        tools: tools.map((tool) => ({
           name: tool.name,
           description: tool.description,
           inputSchema: tool.inputSchema,
@@ -53,12 +53,9 @@ export class BudibaseMCPServer {
       logger.info(`Executing tool: ${name}`, { arguments: args });
 
       try {
-        const tool = tools.find(t => t.name === name);
+        const tool = tools.find((t) => t.name === name);
         if (!tool) {
-          throw new MCPError(
-            ErrorCodes.METHOD_NOT_FOUND,
-            `Tool not found: ${name}`
-          );
+          throw new MCPError(ErrorCodes.METHOD_NOT_FOUND, `Tool not found: ${name}`);
         }
 
         const result = await tool.execute(args, this.budibaseClient);
@@ -76,21 +73,26 @@ export class BudibaseMCPServer {
         logger.error(`Tool execution failed: ${name}`, error);
 
         // Return user-friendly error as tool result instead of throwing
-        const userMessage = error instanceof BudibaseError
-          ? error.toUserMessage()
-          : error instanceof Error
-            ? error.message
-            : String(error);
+        const userMessage =
+          error instanceof BudibaseError
+            ? error.toUserMessage()
+            : error instanceof Error
+              ? error.message
+              : String(error);
 
         return {
           content: [
             {
               type: 'text',
-              text: JSON.stringify({
-                success: false,
-                error: userMessage,
-                message: `Tool '${name}' failed: ${userMessage}`
-              }, null, 2),
+              text: JSON.stringify(
+                {
+                  success: false,
+                  error: userMessage,
+                  message: `Tool '${name}' failed: ${userMessage}`,
+                },
+                null,
+                2,
+              ),
             },
           ],
           isError: true,
@@ -99,10 +101,10 @@ export class BudibaseMCPServer {
     });
 
     // List available resources
-    this.server.setRequestHandler(ListResourcesRequestSchema, async () => {
+    this.server.setRequestHandler(ListResourcesRequestSchema, () => {
       logger.debug('Listing available resources');
       return {
-        resources: resources.map(resource => ({
+        resources: resources.map((resource) => ({
           uri: resource.uri,
           name: resource.name,
           description: resource.description,
@@ -116,12 +118,9 @@ export class BudibaseMCPServer {
       logger.info(`Reading resource: ${uri}`);
 
       try {
-        const resource = resources.find(r => r.uri === uri);
+        const resource = resources.find((r) => r.uri === uri);
         if (!resource) {
-          throw new MCPError(
-            ErrorCodes.INVALID_REQUEST,
-            `Resource not found: ${uri}`
-          );
+          throw new MCPError(ErrorCodes.INVALID_REQUEST, `Resource not found: ${uri}`);
         }
 
         const content = await resource.read(this.budibaseClient);
@@ -139,22 +138,27 @@ export class BudibaseMCPServer {
       } catch (error) {
         logger.error(`Resource read failed: ${uri}`, error);
 
-        const userMessage = error instanceof BudibaseError
-          ? error.toUserMessage()
-          : error instanceof Error
-            ? error.message
-            : String(error);
+        const userMessage =
+          error instanceof BudibaseError
+            ? error.toUserMessage()
+            : error instanceof Error
+              ? error.message
+              : String(error);
 
         return {
           contents: [
             {
               uri,
               mimeType: 'application/json',
-              text: JSON.stringify({
-                success: false,
-                error: userMessage,
-                message: `Failed to read resource: ${userMessage}`
-              }, null, 2),
+              text: JSON.stringify(
+                {
+                  success: false,
+                  error: userMessage,
+                  message: `Failed to read resource: ${userMessage}`,
+                },
+                null,
+                2,
+              ),
             },
           ],
         };
@@ -176,7 +180,7 @@ export class BudibaseMCPServer {
 
     logger.info('Budibase MCP Server is ready', {
       connected: this.budibaseClient.isConnected(),
-      connectionError: this.budibaseClient.getConnectionError()
+      connectionError: this.budibaseClient.getConnectionError(),
     });
   }
 

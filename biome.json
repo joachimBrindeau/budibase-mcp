@@ -1,0 +1,59 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.3.14/schema.json",
+  "files": {
+    "includes": ["src/**/*.ts", "!!node_modules/**", "!!dist/**", "!!tests/**"]
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "a11y": "on",
+      "security": "on",
+      "suspicious": "on",
+      "correctness": {
+        "recommended": true,
+        "noNodejsModules": "off",
+        "noProcessGlobal": "off",
+        "useImportExtensions": "off"
+      },
+      "style": {
+        "recommended": true,
+        "noParameterProperties": "off",
+        "noEnum": "off",
+        "noProcessEnv": "off",
+        "useFilenamingConvention": "off",
+        "useNamingConvention": "off",
+        "noDefaultExport": "off"
+      },
+      "nursery": {
+        "recommended": true,
+        "noTernary": "off",
+        "noIncrementDecrement": "off",
+        "noContinue": "off",
+        "useQwikValidLexicalScope": "off",
+        "noExcessiveLinesPerFile": "off",
+        "noExcessiveClassesPerFile": "off"
+      },
+      "performance": {
+        "recommended": true,
+        "noAwaitInLoops": "off"
+      },
+      "complexity": {
+        "recommended": true,
+        "noExcessiveLinesPerFunction": "off"
+      }
+    }
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 120
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "trailingCommas": "all",
+      "semicolons": "always"
+    }
+  }
+}

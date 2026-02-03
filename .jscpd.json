@@ -1,0 +1,11 @@
+{
+  "threshold": 5,
+  "reporters": ["console"],
+  "ignore": ["node_modules", "dist", "tests/data", "**/*.json"],
+  "absolute": false,
+  "gitignore": true,
+  "minLines": 5,
+  "minTokens": 50,
+  "pattern": ["src/**/*.ts"],
+  "format": ["typescript"]
+}

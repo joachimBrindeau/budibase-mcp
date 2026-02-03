@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { MCPTool } from '../types/mcp';
-import { BudibaseClient } from '../clients/budibase';
-import { validateSchema, AppIdSchema } from '../utils/validation';
+import type { BudibaseClient } from '../clients/budibase';
+import type { MCPTool } from '../types/mcp';
 import { logger } from '../utils/logger';
+import { AppIdSchema, validateSchema } from '../utils/validation';
 
 const CreateAppSchema = z.object({
   name: z.string().min(1, 'App name is required'),
@@ -20,71 +20,72 @@ const PublishAppSchema = z.object({
   appId: AppIdSchema,
 });
 
-const ImportAppSchema = z.object({
-  appId: AppIdSchema,
-  data: z.any(),
-});
-
 export const applicationTools: MCPTool[] = [
   {
     name: 'discover_apps',
-    description: 'Discover and explore your Budibase applications with detailed structure information',
+    description:
+      'Best starting point: lists all apps with their tables and fields. Use this to understand the data model before querying. Related: list_tables, get_table_schema.',
     inputSchema: {
       type: 'object',
       properties: {
-        includeTables: { 
-          type: 'boolean', 
+        includeTables: {
+          type: 'boolean',
           description: 'Include table structure for each app (default: true)',
-          default: true 
+          default: true,
         },
       },
     },
     async execute(args: unknown, client: BudibaseClient) {
-      const validated = validateSchema(z.object({
-        includeTables: z.boolean().default(true)
-      }), args);
-      
+      const validated = validateSchema(
+        z.object({
+          includeTables: z.boolean().default(true),
+        }),
+        args,
+      );
+
       logger.info('Discovering applications');
-      
+
       const apps = await client.getApplications();
-      
-      const appsWithDetails = await Promise.all(apps.map(async (app) => {
-        const appInfo = {
-          name: app.name,
-          id: app._id,
-          metadataId: app._metadataId,
-          status: app.status,
-          url: app.url,
-          created: app.createdAt,
-          updated: app.updatedAt,
-          idCorrected: app._idCorrected,
-          tables: [] as any[]
-        };
 
-        if (validated.includeTables) {
-          try {
-            const tables = await client.getTables(app._id);
-            appInfo.tables = tables.map(table => ({
-              id: table._id,
-              name: table.name,
-              type: table.type,
-              fieldCount: Object.keys(table.schema).length,
-              fields: Object.keys(table.schema)
-            }));
-          } catch (error) {
-            logger.warn(`Could not get tables for app ${app.name}`, error);
-            appInfo.tables = [{ error: 'Could not load tables' }];
+      const appsWithDetails = await Promise.all(
+        apps.map(async (app) => {
+          const appInfo = {
+            name: app.name,
+            id: app._id,
+            metadataId: app._metadataId,
+            status: app.status,
+            url: app.url,
+            created: app.createdAt,
+            updated: app.updatedAt,
+            idCorrected: app._idCorrected,
+            tables: [] as unknown[],
+          };
+
+          if (validated.includeTables) {
+            try {
+              const tables = await client.getTables(app._id);
+              appInfo.tables = tables.map((table) => ({
+                id: table._id,
+                name: table.name,
+                type: table.type,
+                fieldCount: Object.keys(table.schema).length,
+                fields: Object.keys(table.schema),
+              }));
+            } catch (error) {
+              logger.warn(`Could not get tables for app ${app.name}`, error);
+              appInfo.tables = [{ error: 'Could not load tables' }];
+            }
           }
-        }
 
-        return appInfo;
-      }));
-      
+          return appInfo;
+        }),
+      );
+
       return {
         success: true,
         data: {
           totalApps: apps.length,
-          apps: appsWithDetails
+          apps: appsWithDetails,
         },
         message: `Discovered ${apps.length} applications with full structure`,
       };
@@ -93,20 +94,21 @@ export const applicationTools: MCPTool[] = [
 
   {
     name: 'list_applications',
-    description: 'List all Budibase applications with their status and details',
+    description:
+      'List all applications with IDs, names, and status. Use discover_apps for full structure with tables. Related: get_application, create_application.',
     inputSchema: {
       type: 'object',
       properties: {},
     },
-    async execute(args: unknown, client: BudibaseClient) {
+    async execute(_args: unknown, client: BudibaseClient) {
       logger.info('Listing applications');
-      
+
       const apps = await client.getApplications();
-      
+
       return {
         success: true,
         data: {
-          applications: apps.map(app => ({
+          applications: apps.map((app) => ({
             id: app._id,
             name: app.name,
             url: app.url,
@@ -115,7 +117,7 @@ export const applicationTools: MCPTool[] = [
             updatedAt: app.updatedAt,
             // Include debugging info for ID resolution
             _metadataId: app._metadataId,
-            _idCorrected: app._idCorrected
+            _idCorrected: app._idCorrected,
           })),
         },
         message: `Retrieved ${apps.length} applications`,
@@ -135,9 +137,9 @@ export const applicationTools: MCPTool[] = [
     async execute(args: unknown, client: BudibaseClient) {
       const validated = validateSchema(z.object({ appId: AppIdSchema }), args);
       logger.info('Getting application details', { appId: validated.appId });
-      
+
       const app = await client.getApplication(validated.appId);
-      
+
       return {
         success: true,
         data: { application: app },
@@ -161,9 +163,9 @@ export const applicationTools: MCPTool[] = [
     async execute(args: unknown, client: BudibaseClient) {
       const validated = validateSchema(CreateAppSchema, args);
       logger.info('Creating application', { name: validated.name });
-      
+
       const app = await client.createApplication(validated);
-      
+
       return {
         success: true,
         data: { application: app },
@@ -185,9 +187,9 @@ export const applicationTools: MCPTool[] = [
     async execute(args: unknown, client: BudibaseClient) {
       const validated = validateSchema(PublishAppSchema, args);
       logger.info('Publishing application', { appId: validated.appId });
-      
+
       await client.publishApplication(validated.appId);
-      
+
       return {
         success: true,
         message: `Successfully published application ${validated.appId}`,
@@ -210,10 +212,10 @@ export const applicationTools: MCPTool[] = [
     async execute(args: unknown, client: BudibaseClient) {
       const validated = validateSchema(UpdateAppSchema, args);
       logger.info('Updating application', { appId: validated.appId });
-      
+
       const { appId, ...updateData } = validated;
       const app = await client.updateApplication(appId, updateData);
-      
+
       return {
         success: true,
         data: { application: app },
@@ -235,9 +237,9 @@ export const applicationTools: MCPTool[] = [
     async execute(args: unknown, client: BudibaseClient) {
       const validated = validateSchema(PublishAppSchema, args);
       logger.info('Deleting application', { appId: validated.appId });
-      
+
       await client.deleteApplication(validated.appId);
-      
+
       return {
         success: true,
         message: `Successfully deleted application ${validated.appId}`,
@@ -258,14 +260,13 @@ export const applicationTools: MCPTool[] = [
     async execute(args: unknown, client: BudibaseClient) {
       const validated = validateSchema(PublishAppSchema, args);
       logger.info('Unpublishing application', { appId: validated.appId });
-      
+
       await client.unpublishApplication(validated.appId);
-      
+
       return {
         success: true,
         message: `Successfully unpublished application ${validated.appId}`,
       };
     },
   },
-
 ];

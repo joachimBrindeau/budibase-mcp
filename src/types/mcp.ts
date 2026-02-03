@@ -1,12 +1,14 @@
+import type { BudibaseClient } from '../clients/budibase';
+
 export interface MCPTool {
   name: string;
   description: string;
   inputSchema: {
     type: 'object';
-    properties: Record<string, any>;
+    properties: Record<string, Record<string, unknown>>;
     required?: string[];
   };
-  execute: (args: any, client: any) => Promise<any>;
+  execute: (args: unknown, client: BudibaseClient) => Promise<unknown>;
 }
 
 export interface MCPResource {
@@ -14,5 +16,5 @@ export interface MCPResource {
   name: string;
   description: string;
   mimeType: string;
-  read: (client: any) => Promise<any>;
+  read: (client: BudibaseClient) => Promise<unknown> | unknown;
 }

@@ -23,7 +23,7 @@ export interface BudibaseTable {
   primaryDisplay?: string;
   sourceId?: string;
   sql?: boolean;
-  views?: Record<string, any>;
+  views?: Record<string, unknown>;
 }
 
 export interface BudibaseField {
@@ -44,7 +44,7 @@ export interface BudibaseRecord {
   _id: string;
   _rev?: string;
   tableId: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 export interface BudibaseUser {
   _id: string;
@@ -58,15 +58,14 @@ export interface BudibaseUser {
   updatedAt?: string;
 }
 
-
 export interface QueryRequest {
   tableId: string;
   query?: {
     string?: Record<string, string>;
     fuzzy?: Record<string, string>;
     range?: Record<string, { low?: number; high?: number }>;
-    equal?: Record<string, any>;
-    notEqual?: Record<string, any>;
+    equal?: Record<string, string | number | boolean>;
+    notEqual?: Record<string, string | number | boolean>;
     empty?: Record<string, boolean>;
     notEmpty?: Record<string, boolean>;
   };
@@ -87,11 +86,10 @@ export interface BudibaseQuery {
   _id: string;
   name: string;
   datasourceId: string;
-  parameters: any[];
-  fields: any;
+  parameters: Record<string, string>[];
+  fields: Record<string, unknown>;
   queryVerb: string;
   transformer?: string;
-  schema?: any;
+  schema?: Record<string, unknown>;
   readable: boolean;
 }
-

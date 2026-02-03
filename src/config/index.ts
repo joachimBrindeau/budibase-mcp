@@ -25,8 +25,8 @@ export const config = configSchema.parse({
   },
   server: {
     logLevel: process.env.LOG_LEVEL || 'info',
-    cacheTtl: parseInt(process.env.CACHE_TTL || '300'),
-    maxRetries: parseInt(process.env.MAX_RETRIES || '3'),
-    requestTimeout: parseInt(process.env.REQUEST_TIMEOUT || '30000'),
+    cacheTtl: parseInt(process.env.CACHE_TTL || '300', 10),
+    maxRetries: parseInt(process.env.MAX_RETRIES || '3', 10),
+    requestTimeout: parseInt(process.env.REQUEST_TIMEOUT || '30000', 10),
   },
 });

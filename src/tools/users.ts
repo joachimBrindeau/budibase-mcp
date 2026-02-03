@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { MCPTool } from '../types/mcp';
-import { BudibaseClient } from '../clients/budibase';
-import { validateSchema, EmailSchema } from '../utils/validation';
-import { logger } from '../utils/logger';
+import type { BudibaseClient } from '../clients/budibase';
+import type { MCPTool } from '../types/mcp';
 import { BudibaseError } from '../utils/errors';
+import { logger } from '../utils/logger';
+import { EmailSchema, validateSchema } from '../utils/validation';
 
 const CreateUserSchema = z.object({
   email: EmailSchema,
@@ -29,18 +29,19 @@ const GetUserSchema = z.object({
 export const userTools: MCPTool[] = [
   {
     name: 'list_users',
-    description: 'List all users in the Budibase system',
+    description:
+      'List all users with email, name, status, and roles. Related: get_user (single user details), create_user.',
     inputSchema: {
       type: 'object',
       properties: {},
     },
-    async execute(args: unknown, client: BudibaseClient) {
+    async execute(_args: unknown, client: BudibaseClient) {
       logger.info('Listing users');
       const users = await client.getUsers();
       return {
         success: true,
         data: {
-          users: users.map(user => ({
+          users: users.map((user) => ({
             id: user._id,
             email: user.email,
             firstName: user.firstName,
@@ -66,15 +67,15 @@ export const userTools: MCPTool[] = [
     async execute(args: unknown, client: BudibaseClient) {
       const validated = validateSchema(GetUserSchema, args);
       logger.info('Getting user', { userId: validated.userId });
-      
+
       // Since there's no direct get user endpoint, use search and filter
       const users = await client.getUsers();
-      const user = users.find(u => u._id === validated.userId);
-      
+      const user = users.find((u) => u._id === validated.userId);
+
       if (!user) {
         throw new BudibaseError(`User not found: ${validated.userId}`, 404);
       }
-      
+
       return {
         success: true,
         data: { user },
@@ -84,7 +85,8 @@ export const userTools: MCPTool[] = [
   },
   {
     name: 'create_user',
-    description: 'Create a new user in the Budibase system',
+    description:
+      'Create a new user. Password must be 8+ characters. Roles map app IDs to role names. Related: list_users, update_user.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -99,9 +101,9 @@ export const userTools: MCPTool[] = [
     async execute(args: unknown, client: BudibaseClient) {
       const validated = validateSchema(CreateUserSchema, args);
       logger.info('Creating user', { email: validated.email });
-      
+
       const user = await client.createUser(validated);
-      
+
       return {
         success: true,
         data: { user },
@@ -112,7 +114,8 @@ export const userTools: MCPTool[] = [
 
   {
     name: 'update_user',
-    description: 'Update an existing user in the Budibase system',
+    description:
+      'Update user details. Only include fields to change. Use list_users to find user IDs. Related: get_user, delete_user.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -128,28 +131,28 @@ export const userTools: MCPTool[] = [
     async execute(args: unknown, client: BudibaseClient) {
       const validated = validateSchema(UpdateUserSchema, args);
       logger.info('Updating user', { userId: validated.userId });
-      
+
       const { userId, ...updateData } = validated;
-      
+
       // Get current user data first since PUT requires complete object
       const users = await client.getUsers();
-      const currentUser = users.find(u => u._id === userId);
-      
+      const currentUser = users.find((u) => u._id === userId);
+
       if (!currentUser) {
         throw new BudibaseError(`User not found: ${userId}`, 404);
       }
-      
+
       // Merge current data with updates
       const mergedData = {
         email: updateData.email || currentUser.email,
         firstName: updateData.firstName || currentUser.firstName,
         lastName: updateData.lastName || currentUser.lastName,
         status: updateData.status || currentUser.status,
-        roles: updateData.roles || currentUser.roles || {}
+        roles: updateData.roles || currentUser.roles || {},
       };
-      
+
       const user = await client.updateUser(userId, mergedData);
-      
+
       return {
         success: true,
         data: { user },
@@ -160,7 +163,7 @@ export const userTools: MCPTool[] = [
 
   {
     name: 'delete_user',
-    description: 'Delete a user from the Budibase system',
+    description: 'Delete a user permanently. Use list_users to find user IDs. Related: update_user.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -171,9 +174,9 @@ export const userTools: MCPTool[] = [
     async execute(args: unknown, client: BudibaseClient) {
       const validated = validateSchema(GetUserSchema, args);
       logger.info('Deleting user', { userId: validated.userId });
-      
+
       await client.deleteUser(validated.userId);
-      
+
       return {
         success: true,
         message: `Successfully deleted user ${validated.userId}`,

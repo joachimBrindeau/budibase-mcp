@@ -9,7 +9,7 @@ async function main() {
     logger.info('Starting Budibase MCP Server...', {
       version: process.env.npm_package_version || '1.0.0',
       nodeVersion: process.version,
-      budibaseUrl: config.budibase.url
+      budibaseUrl: config.budibase.url,
     });
 
     const server = new BudibaseMCPServer();
@@ -39,7 +39,6 @@ async function main() {
       logger.error('Unhandled rejection at:', promise, 'reason:', reason);
       process.exit(1);
     });
-
   } catch (error) {
     logger.error('Failed to start server:', error);
     process.exit(1);

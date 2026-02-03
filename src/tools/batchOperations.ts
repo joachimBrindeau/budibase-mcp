@@ -1,15 +1,16 @@
 import { z } from 'zod';
-import { MCPTool } from '../types/mcp';
-import { BudibaseClient } from '../clients/budibase';
-import { validateSchema, AppIdSchema, TableIdSchema, RecordIdSchema } from '../utils/validation';
-import { logger } from '../utils/logger';
+import type { BudibaseClient } from '../clients/budibase';
+import type { QueryRequest } from '../types/budibase';
+import type { MCPTool } from '../types/mcp';
 import { BatchOperationManager } from '../utils/batchOperations';
-import { MCPError, ErrorCodes } from '../utils/errors';
+import { ErrorCodes, MCPError } from '../utils/errors';
+import { logger } from '../utils/logger';
+import { AppIdSchema, RecordIdSchema, TableIdSchema, validateSchema } from '../utils/validation';
 
 const BatchCreateSchema = z.object({
   appId: AppIdSchema,
   tableId: TableIdSchema,
-  records: z.array(z.record(z.any())).min(1, 'At least one record is required'),
+  records: z.array(z.record(z.unknown())).min(1, 'At least one record is required'),
   batchSize: z.number().min(1).max(50).default(10),
   continueOnError: z.boolean().default(true),
 });
@@ -17,10 +18,14 @@ const BatchCreateSchema = z.object({
 const BatchUpdateSchema = z.object({
   appId: AppIdSchema,
   tableId: TableIdSchema,
-  records: z.array(z.object({
-    id: RecordIdSchema,
-    data: z.record(z.any())
-  })).min(1, 'At least one record is required'),
+  records: z
+    .array(
+      z.object({
+        id: RecordIdSchema,
+        data: z.record(z.unknown()),
+      }),
+    )
+    .min(1, 'At least one record is required'),
   batchSize: z.number().min(1).max(50).default(10),
   continueOnError: z.boolean().default(true),
 });
@@ -36,7 +41,7 @@ const BatchDeleteSchema = z.object({
 const BatchUpsertSchema = z.object({
   appId: AppIdSchema,
   tableId: TableIdSchema,
-  records: z.array(z.record(z.any())).min(1, 'At least one record is required'),
+  records: z.array(z.record(z.unknown())).min(1, 'At least one record is required'),
   batchSize: z.number().min(1).max(50).default(10),
   continueOnError: z.boolean().default(true),
 });
@@ -44,7 +49,8 @@ const BatchUpsertSchema = z.object({
 export const batchOperationTools: MCPTool[] = [
   {
     name: 'batch_create_records',
-    description: 'Create multiple records in batches with error handling and progress tracking',
+    description:
+      'Create multiple records in batches (max 50 concurrent). Returns per-item errors. success=true only if ALL succeed; partialSuccess=true if some succeed. Related: create_record (single), batch_upsert_records.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -53,12 +59,12 @@ export const batchOperationTools: MCPTool[] = [
         records: {
           type: 'array',
           description: 'Array of record objects to create',
-          items: { type: 'object', additionalProperties: true }
+          items: { type: 'object', additionalProperties: true },
         },
         batchSize: { type: 'number', minimum: 1, maximum: 50, default: 10 },
-        continueOnError: { type: 'boolean', default: true }
+        continueOnError: { type: 'boolean', default: true },
       },
-      required: ['appId', 'tableId', 'records']
+      required: ['appId', 'tableId', 'records'],
     },
     async execute(args: unknown, client: BudibaseClient) {
       const { appId, tableId, records, batchSize, continueOnError } = validateSchema(BatchCreateSchema, args);
@@ -77,7 +83,8 @@ export const batchOperationTools: MCPTool[] = [
 
   {
     name: 'batch_update_records',
-    description: 'Update multiple records in batches with error handling and progress tracking',
+    description:
+      'Update multiple records in batches (max 50 concurrent). Each record needs id + data. Related: update_record (single), bulk_query_and_process (query then update).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -90,15 +97,15 @@ export const batchOperationTools: MCPTool[] = [
             type: 'object',
             properties: {
               id: { type: 'string', description: 'Record ID to update' },
-              data: { type: 'object', description: 'Updated record data' }
+              data: { type: 'object', description: 'Updated record data' },
             },
-            required: ['id', 'data']
-          }
+            required: ['id', 'data'],
+          },
         },
         batchSize: { type: 'number', minimum: 1, maximum: 50, default: 10 },
-        continueOnError: { type: 'boolean', default: true }
+        continueOnError: { type: 'boolean', default: true },
       },
-      required: ['appId', 'tableId', 'records']
+      required: ['appId', 'tableId', 'records'],
     },
     async execute(args: unknown, client: BudibaseClient) {
       const { appId, tableId, records, batchSize, continueOnError } = validateSchema(BatchUpdateSchema, args);
@@ -117,7 +124,8 @@ export const batchOperationTools: MCPTool[] = [
 
   {
     name: 'batch_delete_records',
-    description: 'Delete multiple records in batches with error handling and progress tracking',
+    description:
+      'Delete multiple records by ID in batches (max 50 concurrent). Related: delete_record (single), bulk_query_and_process (query then delete).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -126,12 +134,12 @@ export const batchOperationTools: MCPTool[] = [
         recordIds: {
           type: 'array',
           description: 'Array of record IDs to delete',
-          items: { type: 'string' }
+          items: { type: 'string' },
         },
         batchSize: { type: 'number', minimum: 1, maximum: 50, default: 10 },
-        continueOnError: { type: 'boolean', default: true }
+        continueOnError: { type: 'boolean', default: true },
       },
-      required: ['appId', 'tableId', 'recordIds']
+      required: ['appId', 'tableId', 'recordIds'],
     },
     async execute(args: unknown, client: BudibaseClient) {
       const { appId, tableId, recordIds, batchSize, continueOnError } = validateSchema(BatchDeleteSchema, args);
@@ -150,7 +158,8 @@ export const batchOperationTools: MCPTool[] = [
 
   {
     name: 'batch_upsert_records',
-    description: 'Create or update multiple records (upsert) in batches based on record ID presence',
+    description:
+      'Create or update records in bulk. Records with _id are updated; without _id are created. Max 50 concurrent. Related: batch_create_records, batch_update_records.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -159,12 +168,12 @@ export const batchOperationTools: MCPTool[] = [
         records: {
           type: 'array',
           description: 'Array of record objects (with or without _id for upsert logic)',
-          items: { type: 'object', additionalProperties: true }
+          items: { type: 'object', additionalProperties: true },
         },
         batchSize: { type: 'number', minimum: 1, maximum: 50, default: 10 },
-        continueOnError: { type: 'boolean', default: true }
+        continueOnError: { type: 'boolean', default: true },
       },
-      required: ['appId', 'tableId', 'records']
+      required: ['appId', 'tableId', 'records'],
     },
     async execute(args: unknown, client: BudibaseClient) {
       const { appId, tableId, records, batchSize, continueOnError } = validateSchema(BatchUpsertSchema, args);
@@ -183,7 +192,8 @@ export const batchOperationTools: MCPTool[] = [
 
   {
     name: 'bulk_query_and_process',
-    description: 'Query records and perform bulk operations on the results',
+    description:
+      'Query records then bulk update or delete the results. Example: update all active users, delete all expired records. Max 1000 records per query. Related: query_records, batch_update_records.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -193,25 +203,28 @@ export const batchOperationTools: MCPTool[] = [
         operation: { type: 'string', enum: ['update', 'delete'] },
         updateData: { type: 'object', description: 'Data to update (for update operation)' },
         batchSize: { type: 'number', minimum: 1, maximum: 50, default: 10 },
-        continueOnError: { type: 'boolean', default: true }
+        continueOnError: { type: 'boolean', default: true },
       },
-      required: ['appId', 'tableId', 'operation']
+      required: ['appId', 'tableId', 'operation'],
     },
     async execute(args: unknown, client: BudibaseClient) {
-      const validated = validateSchema(z.object({
-        appId: AppIdSchema,
-        tableId: TableIdSchema,
-        query: z.any().optional(),
-        operation: z.enum(['update', 'delete']),
-        updateData: z.record(z.any()).optional(),
-        batchSize: z.number().min(1).max(50).default(10),
-        continueOnError: z.boolean().default(true),
-      }), args);
+      const validated = validateSchema(
+        z.object({
+          appId: AppIdSchema,
+          tableId: TableIdSchema,
+          query: z.unknown().optional(),
+          operation: z.enum(['update', 'delete']),
+          updateData: z.record(z.unknown()).optional(),
+          batchSize: z.number().min(1).max(50).default(10),
+          continueOnError: z.boolean().default(true),
+        }),
+        args,
+      );
 
       const queryResult = await client.queryRecords(validated.appId, {
         tableId: validated.tableId,
-        query: validated.query,
-        limit: 1000
+        query: validated.query as QueryRequest['query'],
+        limit: 1000,
       });
 
       const records = queryResult.data || [];
@@ -226,19 +239,25 @@ export const batchOperationTools: MCPTool[] = [
       const batchManager = new BatchOperationManager(client);
       const opts = { batchSize: validated.batchSize, continueOnError: validated.continueOnError };
 
-      const result = validated.operation === 'update'
-        ? (() => {
-            if (!validated.updateData) {
-              throw new MCPError(ErrorCodes.INVALID_PARAMS, 'updateData is required for update operation');
-            }
-            return batchManager.batchUpdate(
+      const result =
+        validated.operation === 'update'
+          ? (() => {
+              if (!validated.updateData) {
+                throw new MCPError(ErrorCodes.INVALID_PARAMS, 'updateData is required for update operation');
+              }
+              return batchManager.batchUpdate(
+                validated.appId,
+                validated.tableId,
+                records.map((r) => ({ id: r._id, data: validated.updateData ?? {} })),
+                opts,
+              );
+            })()
+          : batchManager.batchDelete(
               validated.appId,
               validated.tableId,
-              records.map(r => ({ id: r._id, data: validated.updateData! })),
-              opts
+              records.map((r) => r._id),
+              opts,
             );
-          })()
-        : batchManager.batchDelete(validated.appId, validated.tableId, records.map(r => r._id), opts);
 
       const finalResult = await result;
 

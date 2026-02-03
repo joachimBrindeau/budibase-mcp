@@ -1,24 +1,13 @@
 import { z } from 'zod';
-import { MCPTool } from '../types/mcp';
-import { BudibaseClient } from '../clients/budibase';
-import { validateSchema, AppIdSchema, TableIdSchema, RecordIdSchema } from '../utils/validation';
+import type { BudibaseClient } from '../clients/budibase';
+import type { MCPTool } from '../types/mcp';
 import { logger } from '../utils/logger';
+import { AppIdSchema, QueryFilterSchema, RecordIdSchema, TableIdSchema, validateSchema } from '../utils/validation';
 
 const QueryRecordsSchema = z.object({
   appId: AppIdSchema,
   tableId: TableIdSchema,
-  query: z.object({
-    string: z.record(z.string()).optional(),
-    fuzzy: z.record(z.string()).optional(),
-    range: z.record(z.object({
-      low: z.number().optional(),
-      high: z.number().optional(),
-    })).optional(),
-    equal: z.record(z.any()).optional(),
-    notEqual: z.record(z.any()).optional(),
-    empty: z.record(z.boolean()).optional(),
-    notEmpty: z.record(z.boolean()).optional(),
-  }).optional(),
+  query: QueryFilterSchema.optional(),
   sort: z.record(z.enum(['ascending', 'descending'])).optional(),
   limit: z.number().min(1).max(1000).default(50),
   bookmark: z.string().optional(),
@@ -45,7 +34,7 @@ const DeleteRecordSchema = z.object({
 
 const GetTableSchemaSchema = z.object({
   appId: AppIdSchema,
-  tableId: TableIdSchema.optional(),
+  tableId: TableIdSchema,
 });
 
 const GetRecordSchema = z.object({
@@ -76,7 +65,8 @@ const DeleteTableSchema = z.object({
 export const databaseTools: MCPTool[] = [
   {
     name: 'check_connection',
-    description: 'Check connection status to Budibase API',
+    description:
+      'Check connection status to Budibase API. Call this first to verify credentials before other operations. Related: list_applications, discover_apps.',
     inputSchema: {
       type: 'object',
       properties: {},
@@ -113,11 +103,12 @@ export const databaseTools: MCPTool[] = [
 
   {
     name: 'list_tables',
-    description: 'List all tables in a Budibase application',
+    description:
+      'List all tables in a Budibase application. Returns table IDs, names, and field names. Use get_table_schema for full field details. Accepts app name or ID.',
     inputSchema: {
       type: 'object',
       properties: {
-        appId: { type: 'string', description: 'Budibase application ID' },
+        appId: { type: 'string', description: 'Application name or ID (e.g. "My App" or "app_xxx")' },
       },
       required: ['appId'],
     },
@@ -126,11 +117,11 @@ export const databaseTools: MCPTool[] = [
       logger.info('Listing tables', { appId: validated.appId });
 
       const tables = await client.getTables(validated.appId);
-      
+
       return {
         success: true,
         data: {
-          tables: tables.map(table => ({
+          tables: tables.map((table) => ({
             id: table._id,
             name: table.name,
             type: table.type,
@@ -144,26 +135,27 @@ export const databaseTools: MCPTool[] = [
   },
   {
     name: 'get_row',
-    description: 'Get a single row/record from a Budibase table',
+    description:
+      'Get a single row by ID. Returns full record with linked fields normalized. Use query_records to find records by field values.',
     inputSchema: {
       type: 'object',
       properties: {
-        appId: { type: 'string', description: 'Budibase application ID' },
-        tableId: { type: 'string', description: 'Table ID containing the record' },
-        rowId: { type: 'string', description: 'Row/Record ID to retrieve' },
+        appId: { type: 'string', description: 'Application name or ID' },
+        tableId: { type: 'string', description: 'Table name or ID' },
+        rowId: { type: 'string', description: 'Row ID (e.g. "ro_xxx")' },
       },
       required: ['appId', 'tableId', 'rowId'],
     },
     async execute(args: unknown, client: BudibaseClient) {
       const validated = validateSchema(GetRecordSchema, args);
-      logger.info('Getting record', { 
-        appId: validated.appId, 
+      logger.info('Getting record', {
+        appId: validated.appId,
         tableId: validated.tableId,
-        recordId: validated.rowId 
+        recordId: validated.rowId,
       });
 
       const record = await client.getRecord(validated.appId, validated.tableId, validated.rowId);
-      
+
       return {
         success: true,
         data: { record },
@@ -173,28 +165,30 @@ export const databaseTools: MCPTool[] = [
   },
   {
     name: 'query_records',
-    description: 'Query records from a Budibase table with advanced filtering, sorting, and pagination',
+    description:
+      'Query records with filtering, sorting, and pagination. Filters: equal (exact match), string (contains), fuzzy (approximate), range (numeric low/high), notEqual, empty, notEmpty. Example: query: {equal: {status: "active"}, range: {age: {low: 18, high: 65}}}. Use bookmark from response for next page. Related: get_row (single record), aggregate_data (analytics).',
     inputSchema: {
       type: 'object',
       properties: {
-        appId: { type: 'string', description: 'Budibase application ID' },
-        tableId: { type: 'string', description: 'Table ID to query' },
+        appId: { type: 'string', description: 'Application name or ID' },
+        tableId: { type: 'string', description: 'Table name or ID' },
         query: {
           type: 'object',
-          description: 'Query filters',
+          description:
+            'Filters: {equal: {field: value}, string: {field: "search"}, fuzzy: {field: "approx"}, range: {field: {low: 0, high: 100}}, notEqual: {field: value}, empty: {field: true}, notEmpty: {field: true}}',
           properties: {
-            string: { type: 'object', description: 'String search filters' },
-            fuzzy: { type: 'object', description: 'Fuzzy search filters' },
-            range: { type: 'object', description: 'Numeric range filters' },
-            equal: { type: 'object', description: 'Equality filters' },
-            notEqual: { type: 'object', description: 'Inequality filters' },
-            empty: { type: 'object', description: 'Empty value filters' },
-            notEmpty: { type: 'object', description: 'Non-empty value filters' },
+            string: { type: 'object', description: 'Contains match: {fieldName: "search term"}' },
+            fuzzy: { type: 'object', description: 'Approximate match: {fieldName: "approx"}' },
+            range: { type: 'object', description: 'Numeric range: {fieldName: {low: 0, high: 100}}' },
+            equal: { type: 'object', description: 'Exact match: {fieldName: "value"}' },
+            notEqual: { type: 'object', description: 'Exclude match: {fieldName: "value"}' },
+            empty: { type: 'object', description: 'Field is empty: {fieldName: true}' },
+            notEmpty: { type: 'object', description: 'Field has value: {fieldName: true}' },
           },
         },
-        sort: { type: 'object', description: 'Sort configuration' },
-        limit: { type: 'number', description: 'Maximum records to return (1-1000)', default: 50 },
-        bookmark: { type: 'string', description: 'Pagination bookmark' },
+        sort: { type: 'object', description: 'Sort: {fieldName: "ascending" | "descending"}' },
+        limit: { type: 'number', description: 'Max records (1-1000, default 50)' },
+        bookmark: { type: 'string', description: 'Pagination bookmark from previous response' },
       },
       required: ['appId', 'tableId'],
     },
@@ -202,15 +196,8 @@ export const databaseTools: MCPTool[] = [
       const validated = validateSchema(QueryRecordsSchema, args);
       logger.info('Querying records', { appId: validated.appId, tableId: validated.tableId });
 
-      // Resolve table ID in case it's a name
-      const tables = await client.getTables(validated.appId);
-      const resolvedTableId = tables.find(t => 
-        t._id === validated.tableId || 
-        t.name.toLowerCase() === validated.tableId.toLowerCase()
-      )?._id || validated.tableId;
-
       const result = await client.queryRecords(validated.appId, {
-        tableId: resolvedTableId,
+        tableId: validated.tableId,
         query: validated.query,
         sort: validated.sort,
         limit: validated.limit,
@@ -230,13 +217,14 @@ export const databaseTools: MCPTool[] = [
   },
   {
     name: 'create_record',
-    description: 'Create a new record in a Budibase table',
+    description:
+      'Create a new record. Use get_table_schema first to see required fields. For bulk inserts, use batch_create_records (up to 50 at once). Example: data: {name: "John", age: 30}.',
     inputSchema: {
       type: 'object',
       properties: {
-        appId: { type: 'string', description: 'Budibase application ID' },
-        tableId: { type: 'string', description: 'Table ID to create record in' },
-        data: { type: 'object', description: 'Record data to create' },
+        appId: { type: 'string', description: 'Application name or ID' },
+        tableId: { type: 'string', description: 'Table name or ID' },
+        data: { type: 'object', description: 'Record fields: {fieldName: value, ...}' },
       },
       required: ['appId', 'tableId', 'data'],
     },
@@ -256,31 +244,27 @@ export const databaseTools: MCPTool[] = [
 
   {
     name: 'update_record',
-    description: 'Update an existing record in a Budibase table',
+    description:
+      'Update an existing record. Only include fields to change. For bulk updates, use batch_update_records. Related: get_row, query_records.',
     inputSchema: {
       type: 'object',
       properties: {
-        appId: { type: 'string', description: 'Budibase application ID' },
-        tableId: { type: 'string', description: 'Table ID containing the record' },
-        recordId: { type: 'string', description: 'Record ID to update' },
-        data: { type: 'object', description: 'Record data to update' },
+        appId: { type: 'string', description: 'Application name or ID' },
+        tableId: { type: 'string', description: 'Table name or ID' },
+        recordId: { type: 'string', description: 'Record ID (e.g. "ro_xxx")' },
+        data: { type: 'object', description: 'Fields to update: {fieldName: newValue}' },
       },
       required: ['appId', 'tableId', 'recordId', 'data'],
     },
     async execute(args: unknown, client: BudibaseClient) {
       const validated = validateSchema(UpdateRecordSchema, args);
-      logger.info('Updating record', { 
-        appId: validated.appId, 
-        tableId: validated.tableId, 
-        recordId: validated.recordId 
+      logger.info('Updating record', {
+        appId: validated.appId,
+        tableId: validated.tableId,
+        recordId: validated.recordId,
       });
 
-      const record = await client.updateRecord(
-        validated.appId, 
-        validated.tableId, 
-        validated.recordId, 
-        validated.data
-      );
+      const record = await client.updateRecord(validated.appId, validated.tableId, validated.recordId, validated.data);
 
       return {
         success: true,
@@ -291,22 +275,23 @@ export const databaseTools: MCPTool[] = [
   },
   {
     name: 'delete_record',
-    description: 'Delete a record from a Budibase table',
+    description:
+      'Delete a record by ID. For bulk deletes, use batch_delete_records. Use query_records first to find record IDs.',
     inputSchema: {
       type: 'object',
       properties: {
-        appId: { type: 'string', description: 'Budibase application ID' },
-        tableId: { type: 'string', description: 'Table ID containing the record' },
-        recordId: { type: 'string', description: 'Record ID to delete' },
+        appId: { type: 'string', description: 'Application name or ID' },
+        tableId: { type: 'string', description: 'Table name or ID' },
+        recordId: { type: 'string', description: 'Record ID (e.g. "ro_xxx")' },
       },
       required: ['appId', 'tableId', 'recordId'],
     },
     async execute(args: unknown, client: BudibaseClient) {
       const validated = validateSchema(DeleteRecordSchema, args);
-      logger.info('Deleting record', { 
-        appId: validated.appId, 
-        tableId: validated.tableId, 
-        recordId: validated.recordId 
+      logger.info('Deleting record', {
+        appId: validated.appId,
+        tableId: validated.tableId,
+        recordId: validated.recordId,
       });
 
       await client.deleteRecord(validated.appId, validated.tableId, validated.recordId);
@@ -320,71 +305,51 @@ export const databaseTools: MCPTool[] = [
 
   {
     name: 'get_table_schema',
-    description: 'Get table schema information including fields, types, and relationships',
+    description:
+      'Get detailed schema for a specific table including field types and relationships. Use list_tables to find table IDs first.',
     inputSchema: {
       type: 'object',
       properties: {
         appId: { type: 'string', description: 'Budibase application ID' },
-        tableId: { type: 'string', description: 'Specific table ID (optional - returns all tables if omitted)' },
+        tableId: { type: 'string', description: 'Table ID or name' },
       },
-      required: ['appId'],
+      required: ['appId', 'tableId'],
     },
     async execute(args: unknown, client: BudibaseClient) {
       const validated = validateSchema(GetTableSchemaSchema, args);
       logger.info('Getting table schema', { appId: validated.appId, tableId: validated.tableId });
 
-      if (validated.tableId) {
-        // First, try to resolve the table ID in case it's a name
-        const tables = await client.getTables(validated.appId);
-        const resolvedTableId = tables.find(t => 
-          t._id === validated.tableId || 
-          t.name.toLowerCase() === validated.tableId!.toLowerCase()
-        )?._id || validated.tableId;
-        
-        const table = await client.getTable(validated.appId, resolvedTableId);
-        return {
-          success: true,
-          data: {
-            table: {
-              id: table._id,
-              name: table.name,
-              type: table.type,
-              schema: table.schema,
-            },
+      const table = await client.getTable(validated.appId, validated.tableId);
+
+      return {
+        success: true,
+        data: {
+          table: {
+            id: table._id,
+            name: table.name,
+            type: table.type,
+            schema: table.schema,
           },
-          message: `Retrieved schema for table ${table.name}`,
-        };
-      } else {
-        const tables = await client.getTables(validated.appId);
-        return {
-          success: true,
-          data: {
-            tables: tables.map(table => ({
-              id: table._id,
-              name: table.name,
-              type: table.type,
-              fieldCount: Object.keys(table.schema).length,
-              fields: Object.keys(table.schema),
-            })),
-          },
-          message: `Retrieved ${tables.length} tables`,
-        };
-      }
+        },
+        message: `Retrieved schema for table ${table.name}`,
+      };
     },
   },
 
   {
     name: 'create_table',
-    description: 'Create a new table in a Budibase application',
+    description:
+      'Create a new table with schema. Field types: string, number, boolean, datetime, link, formula, attachment. Example schema: {name: {type: "string"}, age: {type: "number"}}. Related: list_tables, get_table_schema.',
     inputSchema: {
       type: 'object',
       properties: {
-        appId: { type: 'string', description: 'Budibase application ID' },
+        appId: { type: 'string', description: 'Application name or ID' },
         name: { type: 'string', description: 'Table name' },
-        schema: { 
-          type: 'object', 
-          description: 'Table schema defining columns and their types',
-          additionalProperties: true
+        schema: {
+          type: 'object',
+          // biome-ignore lint/security/noSecrets: schema description, not a secret
+          description: 'Fields: {fieldName: {type: "string"|"number"|"boolean"|"datetime"|"link"}}',
+          additionalProperties: true,
         },
         primaryDisplay: { type: 'string', description: 'Primary display column (optional)' },
       },
@@ -410,17 +375,18 @@ export const databaseTools: MCPTool[] = [
 
   {
     name: 'update_table',
-    description: 'Update an existing table in a Budibase application',
+    description:
+      'Update table name, schema, or primary display. Accepts table name or ID. Related: create_table, delete_table, get_table_schema.',
     inputSchema: {
       type: 'object',
       properties: {
-        appId: { type: 'string', description: 'Budibase application ID' },
-        tableId: { type: 'string', description: 'Table ID to update' },
+        appId: { type: 'string', description: 'Application name or ID' },
+        tableId: { type: 'string', description: 'Table name or ID' },
         name: { type: 'string', description: 'New table name (optional)' },
-        schema: { 
-          type: 'object', 
+        schema: {
+          type: 'object',
           description: 'Updated table schema (optional)',
-          additionalProperties: true
+          additionalProperties: true,
         },
         primaryDisplay: { type: 'string', description: 'New primary display column (optional)' },
       },
@@ -431,15 +397,7 @@ export const databaseTools: MCPTool[] = [
       logger.info('Updating table', { appId: validated.appId, tableId: validated.tableId });
 
       const { appId, tableId, ...updateData } = validated;
-      
-      // Resolve table ID in case it's a name
-      const tables = await client.getTables(appId);
-      const resolvedTableId = tables.find(t => 
-        t._id === tableId || 
-        t.name.toLowerCase() === tableId.toLowerCase()
-      )?._id || tableId;
-
-      const table = await client.updateTable(appId, resolvedTableId, updateData);
+      const table = await client.updateTable(appId, tableId, updateData);
 
       return {
         success: true,
@@ -451,12 +409,13 @@ export const databaseTools: MCPTool[] = [
 
   {
     name: 'delete_table',
-    description: 'Delete a table from a Budibase application',
+    description:
+      'Delete a table and all its records permanently. Accepts table name or ID. Related: list_tables, update_table.',
     inputSchema: {
       type: 'object',
       properties: {
-        appId: { type: 'string', description: 'Budibase application ID' },
-        tableId: { type: 'string', description: 'Table ID to delete' },
+        appId: { type: 'string', description: 'Application name or ID' },
+        tableId: { type: 'string', description: 'Table name or ID' },
       },
       required: ['appId', 'tableId'],
     },
@@ -464,14 +423,7 @@ export const databaseTools: MCPTool[] = [
       const validated = validateSchema(DeleteTableSchema, args);
       logger.info('Deleting table', { appId: validated.appId, tableId: validated.tableId });
 
-      // Resolve table ID in case it's a name
-      const tables = await client.getTables(validated.appId);
-      const resolvedTableId = tables.find(t => 
-        t._id === validated.tableId || 
-        t.name.toLowerCase() === validated.tableId.toLowerCase()
-      )?._id || validated.tableId;
-
-      await client.deleteTable(validated.appId, resolvedTableId);
+      await client.deleteTable(validated.appId, validated.tableId);
 
       return {
         success: true,

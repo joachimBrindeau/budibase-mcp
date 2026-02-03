@@ -1,16 +1,18 @@
 import pMap from 'p-map';
-import { BudibaseClient } from '../clients/budibase';
-import { BudibaseRecord } from '../types/budibase';
+import type { BudibaseClient } from '../clients/budibase';
+import type { BudibaseRecord } from '../types/budibase';
+import { BudibaseError } from './errors';
 import { logger } from './logger';
 
-export interface BatchResult<T = any> {
+export interface BatchResult<T = unknown> {
   success: boolean;
+  partialSuccess: boolean;
   totalRequested: number;
   totalProcessed: number;
   totalSuccessful: number;
   totalFailed: number;
   results: T[];
-  errors: Array<{ index: number; error: string; data?: any }>;
+  errors: Array<{ index: number; error: string; data?: unknown }>;
   summary: string;
 }
 
@@ -27,19 +29,20 @@ const DEFAULT_CONCURRENCY = 3;
 async function processBatch<TInput, TOutput>(
   items: TInput[],
   processor: (item: TInput, index: number) => Promise<TOutput>,
-  options: BatchOptions = {}
+  options: BatchOptions = {},
 ): Promise<BatchResult<TOutput>> {
   const { continueOnError = true, concurrency = DEFAULT_CONCURRENCY } = options;
 
   const result: BatchResult<TOutput> = {
     success: false,
+    partialSuccess: false,
     totalRequested: items.length,
     totalProcessed: 0,
     totalSuccessful: 0,
     totalFailed: 0,
     results: [],
     errors: [],
-    summary: ''
+    summary: '',
   };
 
   let shouldStop = false;
@@ -64,10 +67,11 @@ async function processBatch<TInput, TOutput>(
       }
       result.totalProcessed++;
     },
-    { concurrency, stopOnError: false }
+    { concurrency, stopOnError: false },
   );
 
-  result.success = result.totalFailed === 0 || (continueOnError && result.totalSuccessful > 0);
+  result.success = result.totalFailed === 0;
+  result.partialSuccess = result.totalFailed > 0 && result.totalSuccessful > 0;
   result.summary = `Processed ${result.totalProcessed}/${result.totalRequested}. ${result.totalSuccessful} successful, ${result.totalFailed} failed.`;
 
   return result;
@@ -76,43 +80,41 @@ async function processBatch<TInput, TOutput>(
 export class BatchOperationManager {
   constructor(private client: BudibaseClient) {}
 
-  async batchCreate(
+  batchCreate(
     appId: string,
     tableId: string,
-    records: Record<string, any>[],
-    options: BatchOptions = {}
+    records: Record<string, unknown>[],
+    options: BatchOptions = {},
   ): Promise<BatchResult<BudibaseRecord>> {
     const batchSize = Math.min(options.batchSize || DEFAULT_BATCH_SIZE, MAX_BATCH_SIZE);
     logger.info('Starting batch create', { appId, tableId, count: records.length, batchSize });
 
-    return processBatch(
-      records,
-      async (record) => this.client.createRecord(appId, tableId, record),
-      { ...options, concurrency: batchSize }
-    );
+    return processBatch(records, async (record) => this.client.createRecord(appId, tableId, record), {
+      ...options,
+      concurrency: batchSize,
+    });
   }
 
-  async batchUpdate(
+  batchUpdate(
     appId: string,
     tableId: string,
-    records: Array<{ id: string; data: Record<string, any> }>,
-    options: BatchOptions = {}
+    records: Array<{ id: string; data: Record<string, unknown> }>,
+    options: BatchOptions = {},
   ): Promise<BatchResult<BudibaseRecord>> {
     const batchSize = Math.min(options.batchSize || DEFAULT_BATCH_SIZE, MAX_BATCH_SIZE);
     logger.info('Starting batch update', { appId, tableId, count: records.length, batchSize });
 
-    return processBatch(
-      records,
-      async ({ id, data }) => this.client.updateRecord(appId, tableId, id, data),
-      { ...options, concurrency: batchSize }
-    );
+    return processBatch(records, async ({ id, data }) => this.client.updateRecord(appId, tableId, id, data), {
+      ...options,
+      concurrency: batchSize,
+    });
   }
 
-  async batchDelete(
+  batchDelete(
     appId: string,
     tableId: string,
     recordIds: string[],
-    options: BatchOptions = {}
+    options: BatchOptions = {},
   ): Promise<BatchResult<string>> {
     const batchSize = Math.min(options.batchSize || DEFAULT_BATCH_SIZE, MAX_BATCH_SIZE);
     logger.info('Starting batch delete', { appId, tableId, count: recordIds.length, batchSize });
@@ -123,15 +125,15 @@ export class BatchOperationManager {
         await this.client.deleteRecord(appId, tableId, recordId);
         return recordId;
       },
-      { ...options, concurrency: batchSize }
+      { ...options, concurrency: batchSize },
     );
   }
 
-  async batchUpsert(
+  batchUpsert(
     appId: string,
     tableId: string,
-    records: Record<string, any>[],
-    options: BatchOptions = {}
+    records: Record<string, unknown>[],
+    options: BatchOptions = {},
   ): Promise<BatchResult<BudibaseRecord>> {
     logger.info('Starting batch upsert', { appId, tableId, count: records.length });
 
@@ -140,14 +142,17 @@ export class BatchOperationManager {
       async (record) => {
         if (record._id) {
           try {
-            return await this.client.updateRecord(appId, tableId, record._id, record);
-          } catch {
-            return await this.client.createRecord(appId, tableId, record);
+            return await this.client.updateRecord(appId, tableId, record._id as string, record);
+          } catch (error) {
+            if (error instanceof BudibaseError && error.statusCode === 404) {
+              return await this.client.createRecord(appId, tableId, record);
+            }
+            throw error;
           }
         }
         return await this.client.createRecord(appId, tableId, record);
       },
-      options
+      options,
     );
   }
 }

@@ -1,55 +1,85 @@
-import { z } from 'zod';
-import { evaluate } from 'mathjs';
 import { format as formatDate, parseISO } from 'date-fns';
+import { evaluate } from 'mathjs';
 import Papa from 'papaparse';
-import { MCPTool } from '../types/mcp';
-import { BudibaseClient } from '../clients/budibase';
-import { validateSchema, AppIdSchema, TableIdSchema } from '../utils/validation';
+import { z } from 'zod';
+import type { BudibaseClient } from '../clients/budibase';
+import type { MCPTool } from '../types/mcp';
 import { logger } from '../utils/logger';
+import { AppIdSchema, QueryFilterSchema, TableIdSchema, validateSchema } from '../utils/validation';
 
 const TransformRecordsSchema = z.object({
   appId: AppIdSchema,
   tableId: TableIdSchema,
-  query: z.object({
-    string: z.record(z.string()).optional(),
-    fuzzy: z.record(z.string()).optional(),
-    range: z.record(z.object({
-      low: z.number().optional(),
-      high: z.number().optional(),
-    })).optional(),
-    equal: z.record(z.any()).optional(),
-    notEqual: z.record(z.any()).optional(),
-    empty: z.record(z.boolean()).optional(),
-    notEmpty: z.record(z.boolean()).optional(),
-  }).optional(),
-  transformations: z.array(z.object({
-    field: z.string(),
-    operation: z.enum(['uppercase', 'lowercase', 'trim', 'prefix', 'suffix', 'replace', 'calculate', 'format_date', 'extract', 'concatenate']),
-    value: z.any().optional(),
-    from: z.string().optional(),
-    to: z.string().optional(),
-    format: z.string().optional(),
-    expression: z.string().optional(),
-    fields: z.array(z.string()).optional(),
-    separator: z.string().optional()
-  })),
+  query: QueryFilterSchema.optional(),
+  transformations: z.array(
+    z.object({
+      field: z.string(),
+      operation: z.enum([
+        'uppercase',
+        'lowercase',
+        'trim',
+        'prefix',
+        'suffix',
+        'replace',
+        'calculate',
+        'format_date',
+        'extract',
+        'concatenate',
+      ]),
+      value: z.unknown().optional(),
+      from: z.string().optional(),
+      to: z.string().optional(),
+      format: z.string().optional(),
+      expression: z.string().optional(),
+      fields: z.array(z.string()).optional(),
+      separator: z.string().optional(),
+    }),
+  ),
   outputFormat: z.enum(['records', 'csv', 'json', 'table']).default('records'),
-  limit: z.number().min(1).max(1000).default(100)
+  limit: z.number().min(1).max(1000).default(100),
 });
 
 const ConvertFormatSchema = z.object({
-  data: z.array(z.record(z.any())),
+  data: z.array(z.record(z.unknown())),
   fromFormat: z.enum(['records', 'csv', 'json']),
   toFormat: z.enum(['records', 'csv', 'json', 'table', 'markdown']),
-  options: z.object({
-    csvDelimiter: z.string().default(','),
-    includeHeaders: z.boolean().default(true),
-    dateFormat: z.string().optional(),
-    numberFormat: z.string().optional()
-  }).optional()
+  options: z
+    .object({
+      csvDelimiter: z.string().default(','),
+      includeHeaders: z.boolean().default(true),
+      dateFormat: z.string().optional(),
+      numberFormat: z.string().optional(),
+    })
+    .optional(),
 });
 
-function transformValue(value: any, transformation: any, record: any = {}): any {
+interface Transformation {
+  field: string;
+  operation: string;
+  value?: unknown;
+  from?: string;
+  to?: string;
+  format?: string;
+  expression?: string;
+  fields?: string[];
+  separator?: string;
+}
+
+function isLinkedFieldArray(value: unknown): boolean {
+  return (
+    Array.isArray(value) && value.length > 0 && typeof value[0] === 'object' && value[0] !== null && '_id' in value[0]
+  );
+}
+
+function transformValue(value: unknown, transformation: Transformation, record: Record<string, unknown> = {}): unknown {
+  if (isLinkedFieldArray(value)) {
+    logger.warn('Skipping transformation on linked field array', {
+      field: transformation.field,
+      operation: transformation.operation,
+    });
+    return value;
+  }
+
   const { operation, value: transformValue, from, to, format, expression } = transformation;
 
   switch (operation) {
@@ -96,7 +126,7 @@ function transformValue(value: any, transformation: any, record: any = {}): any 
     case 'format_date':
       if (value && format) {
         try {
-          const date = typeof value === 'string' ? parseISO(value) : new Date(value);
+          const date = typeof value === 'string' ? parseISO(value) : new Date(value as number);
           // Use date-fns format patterns
           return formatDate(date, format);
         } catch (err) {
@@ -118,7 +148,18 @@ function transformValue(value: any, transformation: any, record: any = {}): any 
   }
 }
 
-function convertToFormat(data: any[], format: string, options: any = {}): any {
+interface ConvertOptions {
+  csvDelimiter?: string;
+  includeHeaders?: boolean;
+  dateFormat?: string;
+  numberFormat?: string;
+}
+
+function convertToFormat(
+  data: Record<string, unknown>[],
+  format: string,
+  options: ConvertOptions = {},
+): string | Record<string, unknown>[] {
   const { csvDelimiter = ',', includeHeaders = true } = options;
 
   switch (format) {
@@ -134,21 +175,22 @@ function convertToFormat(data: any[], format: string, options: any = {}): any {
       return JSON.stringify(data, null, 2);
 
     case 'table':
-    case 'markdown':
+    case 'markdown': {
       if (data.length === 0) return 'No data';
 
       const headers = Object.keys(data[0]);
-      const colWidths = headers.map(header =>
-        Math.max(header.length, ...data.map(row => String(row[header] ?? '').length))
+      const colWidths = headers.map((header) =>
+        Math.max(header.length, ...data.map((row) => String(row[header] ?? '').length)),
       );
 
-      const headerRow = '| ' + headers.map((h, i) => h.padEnd(colWidths[i])).join(' | ') + ' |';
-      const separatorRow = '| ' + colWidths.map(w => '-'.repeat(w)).join(' | ') + ' |';
-      const dataRows = data.map(record =>
-        '| ' + headers.map((h, i) => String(record[h] ?? '').padEnd(colWidths[i])).join(' | ') + ' |'
+      const headerRow = `| ${headers.map((h, i) => h.padEnd(colWidths[i])).join(' | ')} |`;
+      const separatorRow = `| ${colWidths.map((w) => '-'.repeat(w)).join(' | ')} |`;
+      const dataRows = data.map(
+        (record) => `| ${headers.map((h, i) => String(record[h] ?? '').padEnd(colWidths[i])).join(' | ')} |`,
       );
 
       return [headerRow, separatorRow, ...dataRows].join('\n');
+    }
 
     default:
       return data;
@@ -158,7 +200,8 @@ function convertToFormat(data: any[], format: string, options: any = {}): any {
 export const dataTransformTools: MCPTool[] = [
   {
     name: 'transform_records',
-    description: 'Query records and apply transformations like formatting, calculations, and data cleaning',
+    description:
+      'Query records then apply transformations: uppercase, lowercase, trim, prefix, suffix, replace, calculate (mathjs expressions like "value * 2 + price"), format_date (date-fns patterns like "yyyy-MM-dd"), extract (regex), concatenate. Output as records, csv, json, or table. Related: query_records, convert_data_format, aggregate_data.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -174,8 +217,8 @@ export const dataTransformTools: MCPTool[] = [
             equal: { type: 'object' },
             notEqual: { type: 'object' },
             empty: { type: 'object' },
-            notEmpty: { type: 'object' }
-          }
+            notEmpty: { type: 'object' },
+          },
         },
         transformations: {
           type: 'array',
@@ -186,8 +229,19 @@ export const dataTransformTools: MCPTool[] = [
               field: { type: 'string', description: 'Field name to transform' },
               operation: {
                 type: 'string',
-                enum: ['uppercase', 'lowercase', 'trim', 'prefix', 'suffix', 'replace', 'calculate', 'format_date', 'extract', 'concatenate'],
-                description: 'Transformation operation'
+                enum: [
+                  'uppercase',
+                  'lowercase',
+                  'trim',
+                  'prefix',
+                  'suffix',
+                  'replace',
+                  'calculate',
+                  'format_date',
+                  'extract',
+                  'concatenate',
+                ],
+                description: 'Transformation operation',
               },
               value: { description: 'Value for prefix/suffix operations' },
               from: { type: 'string', description: 'From value for replace/extract operations' },
@@ -195,49 +249,53 @@ export const dataTransformTools: MCPTool[] = [
               format: { type: 'string', description: 'Format pattern (date-fns format for dates, e.g., "yyyy-MM-dd")' },
               expression: { type: 'string', description: 'Math expression using mathjs (e.g., "value * 2 + 10")' },
               fields: { type: 'array', items: { type: 'string' }, description: 'Fields to concatenate' },
-              separator: { type: 'string', description: 'Separator for concatenation' }
+              separator: { type: 'string', description: 'Separator for concatenation' },
             },
-            required: ['field', 'operation']
-          }
+            required: ['field', 'operation'],
+          },
         },
         outputFormat: {
           type: 'string',
           enum: ['records', 'csv', 'json', 'table'],
           default: 'records',
-          description: 'Output format for transformed data'
+          description: 'Output format for transformed data',
         },
-        limit: { type: 'number', minimum: 1, maximum: 1000, default: 100 }
+        limit: { type: 'number', minimum: 1, maximum: 1000, default: 100 },
       },
-      required: ['appId', 'tableId', 'transformations']
+      required: ['appId', 'tableId', 'transformations'],
     },
     async execute(args: unknown, client: BudibaseClient) {
       const validated = validateSchema(TransformRecordsSchema, args);
       logger.info('Starting record transformation', {
         appId: validated.appId,
         tableId: validated.tableId,
-        transformationCount: validated.transformations.length
+        transformationCount: validated.transformations.length,
       });
 
       const queryResult = await client.queryRecords(validated.appId, {
         tableId: validated.tableId,
         query: validated.query,
-        limit: validated.limit
+        limit: validated.limit,
       });
 
       const records = queryResult.data || [];
       logger.info(`Retrieved ${records.length} records for transformation`);
 
-      const transformedRecords = records.map(record => {
+      const transformedRecords = records.map((record) => {
         const transformed = { ...record };
 
         for (const transformation of validated.transformations) {
           const fieldValue = transformed[transformation.field];
 
           if (transformation.operation === 'concatenate' && transformation.fields) {
-            const values = transformation.fields.map(field => transformed[field] || '');
+            const values = transformation.fields.map((field) => transformed[field] || '');
             transformed[transformation.field] = values.join(transformation.separator || ' ');
           } else {
-            transformed[transformation.field] = transformValue(fieldValue, transformation, record);
+            transformed[transformation.field] = transformValue(
+              fieldValue,
+              transformation,
+              record as Record<string, unknown>,
+            ) as string;
           }
         }
 
@@ -245,9 +303,8 @@ export const dataTransformTools: MCPTool[] = [
       });
 
       const outputFormat = validated.outputFormat || 'records';
-      const output = outputFormat === 'records'
-        ? transformedRecords
-        : convertToFormat(transformedRecords, outputFormat);
+      const output =
+        outputFormat === 'records' ? transformedRecords : convertToFormat(transformedRecords, outputFormat);
 
       return {
         success: true,
@@ -256,7 +313,7 @@ export const dataTransformTools: MCPTool[] = [
           transformedCount: transformedRecords.length,
           transformations: validated.transformations,
           outputFormat: validated.outputFormat,
-          result: output
+          result: output,
         },
         message: `Applied ${validated.transformations.length} transformations to ${records.length} records`,
       };
@@ -265,24 +322,25 @@ export const dataTransformTools: MCPTool[] = [
 
   {
     name: 'convert_data_format',
-    description: 'Convert data between different formats (JSON, CSV, Table, Markdown)',
+    description:
+      'Convert record arrays between formats: records, csv, json, table (markdown). Useful after query_records to format output for display. Related: transform_records.',
     inputSchema: {
       type: 'object',
       properties: {
         data: {
           type: 'array',
           description: 'Array of record objects to convert',
-          items: { type: 'object' }
+          items: { type: 'object' },
         },
         fromFormat: {
           type: 'string',
           enum: ['records', 'csv', 'json'],
-          description: 'Source format of the data'
+          description: 'Source format of the data',
         },
         toFormat: {
           type: 'string',
           enum: ['records', 'csv', 'json', 'table', 'markdown'],
-          description: 'Target format for conversion'
+          description: 'Target format for conversion',
         },
         options: {
           type: 'object',
@@ -290,38 +348,43 @@ export const dataTransformTools: MCPTool[] = [
             csvDelimiter: { type: 'string', default: ',' },
             includeHeaders: { type: 'boolean', default: true },
             dateFormat: { type: 'string' },
-            numberFormat: { type: 'string' }
-          }
-        }
+            numberFormat: { type: 'string' },
+          },
+        },
       },
-      required: ['data', 'fromFormat', 'toFormat']
+      required: ['data', 'fromFormat', 'toFormat'],
     },
-    async execute(args: unknown) {
+    execute(args: unknown) {
       const validated = validateSchema(ConvertFormatSchema, args);
       logger.info('Converting data format', {
         fromFormat: validated.fromFormat,
         toFormat: validated.toFormat,
-        recordCount: validated.data.length
+        recordCount: validated.data.length,
       });
 
-      const converted = convertToFormat(validated.data, validated.toFormat, validated.options);
+      const converted = convertToFormat(
+        validated.data as Record<string, unknown>[],
+        validated.toFormat,
+        validated.options,
+      );
 
-      return {
+      return Promise.resolve({
         success: true,
         data: {
           originalFormat: validated.fromFormat,
           targetFormat: validated.toFormat,
           recordCount: validated.data.length,
-          converted
+          converted,
         },
         message: `Converted ${validated.data.length} records from ${validated.fromFormat} to ${validated.toFormat}`,
-      };
+      });
     },
   },
 
   {
     name: 'aggregate_data',
-    description: 'Perform aggregations on record data (count, sum, average, min, max, group by)',
+    description:
+      'Aggregate records: count, sum, avg, min, max, distinct_count. Supports groupBy for grouped analytics. Example: aggregations: [{field: "amount", operation: "sum"}], groupBy: ["status"]. Related: query_records, transform_records.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -329,12 +392,12 @@ export const dataTransformTools: MCPTool[] = [
         tableId: { type: 'string', description: 'Table ID or name' },
         query: {
           type: 'object',
-          description: 'Query to filter records before aggregation'
+          description: 'Query to filter records before aggregation',
         },
         groupBy: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Fields to group by'
+          description: 'Fields to group by',
         },
         aggregations: {
           type: 'array',
@@ -346,77 +409,94 @@ export const dataTransformTools: MCPTool[] = [
               operation: {
                 type: 'string',
                 enum: ['count', 'sum', 'avg', 'min', 'max', 'distinct_count'],
-                description: 'Aggregation operation'
+                description: 'Aggregation operation',
               },
-              alias: { type: 'string', description: 'Alias for the result field' }
+              alias: { type: 'string', description: 'Alias for the result field' },
             },
-            required: ['field', 'operation']
-          }
+            required: ['field', 'operation'],
+          },
         },
-        limit: { type: 'number', minimum: 1, maximum: 1000, default: 100 }
+        limit: { type: 'number', minimum: 1, maximum: 1000, default: 100 },
       },
-      required: ['appId', 'tableId', 'aggregations']
+      required: ['appId', 'tableId', 'aggregations'],
     },
     async execute(args: unknown, client: BudibaseClient) {
-      const validated = validateSchema(z.object({
-        appId: AppIdSchema,
-        tableId: TableIdSchema,
-        query: z.any().optional(),
-        groupBy: z.array(z.string()).optional(),
-        aggregations: z.array(z.object({
-          field: z.string(),
-          operation: z.enum(['count', 'sum', 'avg', 'min', 'max', 'distinct_count']),
-          alias: z.string().optional()
-        })),
-        limit: z.number().min(1).max(1000).default(100)
-      }), args);
+      const validated = validateSchema(
+        z.object({
+          appId: AppIdSchema,
+          tableId: TableIdSchema,
+          query: QueryFilterSchema.optional(),
+          groupBy: z.array(z.string()).optional(),
+          aggregations: z.array(
+            z.object({
+              field: z.string(),
+              operation: z.enum(['count', 'sum', 'avg', 'min', 'max', 'distinct_count']),
+              alias: z.string().optional(),
+            }),
+          ),
+          limit: z.number().min(1).max(1000).default(100),
+        }),
+        args,
+      );
 
       logger.info('Starting data aggregation', {
         appId: validated.appId,
         tableId: validated.tableId,
         groupBy: validated.groupBy,
-        aggregationCount: validated.aggregations.length
+        aggregationCount: validated.aggregations.length,
       });
 
       const queryResult = await client.queryRecords(validated.appId, {
         tableId: validated.tableId,
         query: validated.query,
-        limit: validated.limit
+        limit: validated.limit,
       });
 
       const records = queryResult.data || [];
 
-      const performAggregation = (groupRecords: any[], agg: typeof validated.aggregations[0]) => {
-        const values = groupRecords
-          .map(r => r[agg.field])
-          .filter(v => v !== null && v !== undefined);
+      const performAggregation = (groupRecords: Record<string, unknown>[], agg: (typeof validated.aggregations)[0]) => {
+        const values = groupRecords.map((r) => r[agg.field]).filter((v) => v !== null && v !== undefined);
 
         switch (agg.operation) {
-          case 'count': return groupRecords.length;
-          case 'sum': return values.reduce((sum, val) => sum + (Number(val) || 0), 0);
-          case 'avg': return values.length > 0 ? values.reduce((sum, val) => sum + (Number(val) || 0), 0) / values.length : 0;
-          case 'min': return values.length > 0 ? Math.min(...values.map(Number)) : null;
-          case 'max': return values.length > 0 ? Math.max(...values.map(Number)) : null;
-          case 'distinct_count': return new Set(values).size;
-          default: return null;
+          case 'count':
+            return groupRecords.length;
+          case 'sum':
+            return values.reduce<number>((sum, val) => sum + (Number(val) || 0), 0);
+          case 'avg':
+            return values.length > 0
+              ? values.reduce<number>((sum, val) => sum + (Number(val) || 0), 0) / values.length
+              : 0;
+          case 'min':
+            return values.length > 0 ? Math.min(...values.map(Number)) : null;
+          case 'max':
+            return values.length > 0 ? Math.max(...values.map(Number)) : null;
+          case 'distinct_count':
+            return new Set(values).size;
+          default:
+            return null;
         }
       };
 
-      let results: any[];
+      let results: Record<string, unknown>[];
 
       if (validated.groupBy?.length) {
-        const groups = new Map<string, any[]>();
+        const groups = new Map<string, Record<string, unknown>[]>();
 
         for (const record of records) {
-          const groupKey = validated.groupBy.map(field => record[field]).join('|');
+          const groupKey = validated.groupBy.map((field) => record[field]).join('|');
           if (!groups.has(groupKey)) groups.set(groupKey, []);
-          groups.get(groupKey)!.push(record);
+          const group = groups.get(groupKey);
+          if (group) group.push(record);
         }
 
         results = Array.from(groups.entries()).map(([groupKey, groupRecords]) => {
-          const result: Record<string, any> = {};
+          const result: Record<string, unknown> = {};
           const groupValues = groupKey.split('|');
-          validated.groupBy!.forEach((field, i) => result[field] = groupValues[i]);
+          if (validated.groupBy) {
+            for (let i = 0; i < validated.groupBy.length; i++) {
+              result[validated.groupBy[i]] = groupValues[i];
+            }
+          }
 
           for (const agg of validated.aggregations) {
             result[agg.alias || `${agg.operation}_${agg.field}`] = performAggregation(groupRecords, agg);
@@ -424,7 +504,7 @@ export const dataTransformTools: MCPTool[] = [
           return result;
         });
       } else {
-        const result: Record<string, any> = {};
+        const result: Record<string, unknown> = {};
         for (const agg of validated.aggregations) {
           result[agg.alias || `${agg.operation}_${agg.field}`] = performAggregation(records, agg);
         }
@@ -437,7 +517,7 @@ export const dataTransformTools: MCPTool[] = [
           totalRecords: records.length,
           groupBy: validated.groupBy,
           aggregations: validated.aggregations,
-          results
+          results,
         },
         message: `Aggregated ${records.length} records into ${results.length} result(s)`,
       };

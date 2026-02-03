@@ -1,0 +1,23 @@
+pre-commit:
+  parallel: true
+  commands:
+    biome-check:
+      glob: "src/**/*.ts"
+      run: npx biome check --no-errors-on-unmatched {staged_files}
+    gitleaks:
+      run: gitleaks protect --staged --no-banner
+    typecheck:
+      glob: "src/**/*.ts"
+      run: npx tsc --noEmit
+
+pre-push:
+  parallel: true
+  commands:
+    knip:
+      run: npx knip
+    jscpd:
+      run: npx jscpd
+    biome-lint:
+      run: npx biome check src/
+    gitleaks-full:
+      run: gitleaks detect --no-banner

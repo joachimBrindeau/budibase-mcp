@@ -1,35 +1,27 @@
 #!/bin/bash
-# Budibase MCP Server - Quick Setup Script
+# Budibase MCP Server - Setup Script
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_DIR"
 
-echo "🚀 Budibase MCP Server - Schema Registry Setup"
-echo "=============================================="
+echo "Budibase MCP Server Setup"
+echo "========================="
 
-# Check .env
 if [ ! -f .env ]; then
     cp .env.example .env
-    echo "✅ Created .env - Please edit with your credentials and press Enter"
+    echo "Created .env from template. Edit with your credentials, then press Enter."
     read -r
 fi
 
-# Install, migrate, build, initialize
-echo "📦 Installing dependencies..."
-npm install sqlite3 sqlite
+echo "Installing dependencies..."
+npm install
 
-echo "🔄 Running migration..."
-node scripts/migrate-schema-registry.js
-
-echo "🔨 Building project..."
+echo "Building project..."
 npm run build
 
-echo "🧪 Running tests..."
-node tests/integration.js
-
 echo "
-✅ Setup complete! Run 'npm start' to begin.
+Setup complete! Run 'npm start' to begin.
 
 For Claude Desktop, add to config:
 {
