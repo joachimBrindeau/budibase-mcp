@@ -27,15 +27,16 @@ Before any tool call, load persistent knowledge to skip redundant discovery.
 1. Read .claude/skills/budibase/knowledge/_index.yaml
    - If missing → run Bootstrap (see below)
    - If budibase_url != BUDIBASE_URL from environment → delete all knowledge, run Bootstrap
-2. Match user intent to an app:
+2. Match user intent to an app + table:
    - By explicit app name ("in CRM") → direct lookup in _index.yaml
    - By entity name ("Elicit") → scan table files in app folder for entity match
    - By alias → check aliases in _index.yaml
-   - By table name ("Clients table") → check tables list in _index.yaml
+   - By table name ("Clients table") → check tables map in _index.yaml
    - Ambiguous match → check defaults in _index.yaml, or ask user
-3. Read the matched table file: knowledge/{app-folder}/{table-name}.yaml
-4. Use known IDs: appId, tableId, rowId, schema, workflows
-5. Only call discovery tools (discover_apps, get_table_schema) for unknown paths
+3. Get appId + tableId directly from _index.yaml (tables map has IDs)
+4. If app folder doesn't exist → run Hydrate App (creates all table files with schemas)
+5. Read knowledge/{app-folder}/{table-name}.yaml for entities, workflows, schema details
+6. Only call discovery tools for paths not in _index.yaml
 ```
 
 ### Bootstrap
@@ -45,16 +46,27 @@ Triggered when `_index.yaml` doesn't exist, or user says "rebuild knowledge" / "
 ```
 1. Call discover_apps(includeTables: true)
 2. Write _index.yaml:
-   - budibase_url from environment
    - bootstrapped date
-   - Each app: name, folder slug, appId, aliases (empty), tables list
-3. Create per-app folder: knowledge/{app-slug}/
-4. Write per-table YAML files: knowledge/{app-slug}/{table-name}.yaml
-   - table section: name, tableId, primaryDisplay
-   - schema, entities, workflows sections: empty (filled incrementally)
+   - Each app: name, folder slug, appId, aliases (empty), tables map (name → tableId)
+   - No app folders or table files yet (created on first access via Hydrate)
 ```
 
 **Slugification:** `name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')`
+
+### Hydrate App
+
+Triggered the first time an app is referenced (app folder doesn't exist):
+
+```
+1. Call get_table_schema for EACH table in the app (use tableIds from _index.yaml)
+2. Create app folder: knowledge/{app-slug}/
+3. Write per-table YAML files: knowledge/{app-slug}/{table-name}.yaml
+   - table section: name, tableId, primaryDisplay (from schema response)
+   - schema section: all fields with name, type, link target
+   - entities, workflows sections: empty (filled incrementally)
+```
+
+**Cost:** N API calls (one per table). Done once per app, on first access.
 
 ### Knowledge File Structure
 
@@ -76,9 +88,9 @@ apps:
     appId: app_abc123
     aliases: []
     tables:
-      - comptes
-      - contacts
-      - dossiers
+      comptes: ta_xyz789
+      contacts: ta_abc123
+      dossiers: ta_def456
 
 defaults:
   Contacts: klarc
@@ -216,8 +228,9 @@ After executing a tool, persist newly discovered structural data to knowledge fi
 
 | Trigger | What to write | Target file |
 |---------|--------------|-------------|
-| `discover_apps` called | All apps + tables | `_index.yaml` + create table YAML files |
-| `get_table_schema` called | Schema for that table | `{app}/{table}.yaml` (schema section) |
+| Bootstrap (`discover_apps`) | All apps + table name→ID maps | `_index.yaml` only |
+| Hydrate App (first access) | All table schemas for that app | `{app}/{table}.yaml` for each table |
+| `get_table_schema` called (refresh) | Updated schema for that table | `{app}/{table}.yaml` (schema section) |
 | Entity resolved by query | rowId + matchField | `{app}/{table}.yaml` (entities section) |
 | Recurring workflow pattern | trigger + steps + field | `{app}/{table}.yaml` (workflows section) |
 | Table/app created | New entry | `_index.yaml` + new table YAML file |
@@ -244,7 +257,7 @@ When a tool call fails due to stale knowledge:
 | 404 on tableId | Table deleted/renamed | Re-discover app tables (`discover_apps`), update knowledge |
 | 404 on rowId | Record deleted | Remove entity entry, query by matchField |
 | 400 "field X does not exist" | Schema changed | Re-fetch `get_table_schema`, update knowledge |
-| 404 on appId | App deleted | Remove from `_index.yaml` + delete app file |
+| 404 on appId | App deleted | Remove from `_index.yaml` + delete app folder |
 | 401 / 403 | Auth problem | Pass through to user. Never re-discover |
 | 429 | Rate limited | Pass through. Retry handled by axios-retry |
 | 5xx | Server error | Pass through. Never re-discover |
@@ -254,9 +267,9 @@ When a tool call fails due to stale knowledge:
 
 | User Says | Action |
 |-----------|--------|
-| "rebuild knowledge" / "forget everything" | Delete all YAML files in knowledge/, run Bootstrap |
-| "forget [app name]" | Delete that app's YAML + remove from `_index.yaml`, re-bootstrap that app |
-| "refresh [app name]" | Same as forget + re-bootstrap |
+| "rebuild knowledge" / "forget everything" | Delete all knowledge files + folders, run Bootstrap |
+| "forget [app name]" | Delete that app's folder + remove from `_index.yaml` |
+| "refresh [app name]" | Delete app folder, re-run Hydrate App |
 | "[entity] means the [app] one" | Update defaults in `_index.yaml` |
 
 ## Workflow Recipes
