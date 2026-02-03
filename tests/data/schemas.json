@@ -1,0 +1,200 @@
+{
+  "simple": {
+    "name": {
+      "type": "string",
+      "name": "name"
+    },
+    "value": {
+      "type": "number",
+      "name": "value"
+    },
+    "active": {
+      "type": "boolean",
+      "name": "active"
+    }
+  },
+  "users": {
+    "name": {
+      "type": "string",
+      "name": "name"
+    },
+    "email": {
+      "type": "string",
+      "name": "email"
+    },
+    "phone": {
+      "type": "string",
+      "name": "phone"
+    },
+    "department": {
+      "type": "string",
+      "name": "department"
+    },
+    "salary": {
+      "type": "number",
+      "name": "salary"
+    },
+    "hire_date": {
+      "type": "datetime",
+      "name": "hire_date"
+    },
+    "active": {
+      "type": "boolean",
+      "name": "active"
+    },
+    "address": {
+      "type": "string",
+      "name": "address"
+    }
+  },
+  "products": {
+    "name": {
+      "type": "string",
+      "name": "name"
+    },
+    "description": {
+      "type": "string",
+      "name": "description"
+    },
+    "category": {
+      "type": "string",
+      "name": "category"
+    },
+    "price": {
+      "type": "number",
+      "name": "price"
+    },
+    "cost": {
+      "type": "number",
+      "name": "cost"
+    },
+    "quantity": {
+      "type": "number",
+      "name": "quantity"
+    },
+    "sku": {
+      "type": "string",
+      "name": "sku"
+    },
+    "active": {
+      "type": "boolean",
+      "name": "active"
+    },
+    "created_date": {
+      "type": "datetime",
+      "name": "created_date"
+    },
+    "updated_date": {
+      "type": "datetime",
+      "name": "updated_date"
+    }
+  },
+  "orders": {
+    "order_id": {
+      "type": "string",
+      "name": "order_id"
+    },
+    "customer_name": {
+      "type": "string",
+      "name": "customer_name"
+    },
+    "customer_email": {
+      "type": "string",
+      "name": "customer_email"
+    },
+    "product_name": {
+      "type": "string",
+      "name": "product_name"
+    },
+    "quantity": {
+      "type": "number",
+      "name": "quantity"
+    },
+    "unit_price": {
+      "type": "number",
+      "name": "unit_price"
+    },
+    "total_amount": {
+      "type": "number",
+      "name": "total_amount"
+    },
+    "order_date": {
+      "type": "datetime",
+      "name": "order_date"
+    },
+    "status": {
+      "type": "string",
+      "name": "status"
+    },
+    "shipping_address": {
+      "type": "string",
+      "name": "shipping_address"
+    }
+  },
+  "comprehensive": {
+    "id": {
+      "type": "string",
+      "name": "id"
+    },
+    "name": {
+      "type": "string",
+      "name": "name"
+    },
+    "description": {
+      "type": "string",
+      "name": "description"
+    },
+    "category": {
+      "type": "string",
+      "name": "category"
+    },
+    "subcategory": {
+      "type": "string",
+      "name": "subcategory"
+    },
+    "value": {
+      "type": "number",
+      "name": "value"
+    },
+    "price": {
+      "type": "number",
+      "name": "price"
+    },
+    "quantity": {
+      "type": "number",
+      "name": "quantity"
+    },
+    "rating": {
+      "type": "number",
+      "name": "rating"
+    },
+    "active": {
+      "type": "boolean",
+      "name": "active"
+    },
+    "featured": {
+      "type": "boolean",
+      "name": "featured"
+    },
+    "created_date": {
+      "type": "datetime",
+      "name": "created_date"
+    },
+    "updated_date": {
+      "type": "datetime",
+      "name": "updated_date"
+    },
+    "status": {
+      "type": "string",
+      "name": "status"
+    },
+    "tags": {
+      "type": "string",
+      "name": "tags"
+    },
+    "metadata": {
+      "type": "string",
+      "name": "metadata"
+    }
+  }
+}

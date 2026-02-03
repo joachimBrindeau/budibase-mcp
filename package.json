@@ -1,0 +1,56 @@
+{
+  "name": "budibase-mcp-server",
+  "version": "1.0.0",
+  "description": "Model Context Protocol server for Budibase integration",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "test": "node tests/suite.js",
+    "test:integration": "node tests/integration.js",
+    "test:stress": "node tests/stress.js",
+    "test:all": "bash scripts/run-all-tests.sh",
+    "setup": "bash scripts/setup.sh",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix"
+  },
+  "keywords": [
+    "mcp",
+    "budibase",
+    "ai",
+    "integration"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "axios": "^1.6.0",
+    "axios-retry": "^4.5.0",
+    "date-fns": "^4.1.0",
+    "dotenv": "^16.3.0",
+    "mathjs": "^15.1.0",
+    "node-cache": "^5.1.2",
+    "p-map": "^7.0.4",
+    "papaparse": "^5.5.3",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.6",
+    "winston": "^3.11.0",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "@types/node": "^20.10.0",
+    "@types/papaparse": "^5.5.2",
+    "@typescript-eslint/eslint-plugin": "^6.14.0",
+    "@typescript-eslint/parser": "^6.14.0",
+    "eslint": "^8.55.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.0",
+    "tsx": "^4.6.0",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

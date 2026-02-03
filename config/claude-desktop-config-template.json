@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "budibase": {
+      "command": "node",
+      "args": [
+        "/Users/joachim/Documents/MCP/budibase-mcp-server/dist/index.js"
+      ],
+      "env": {
+        "BUDIBASE_URL": "https://your-budibase-instance.com",
+        "BUDIBASE_API_KEY": "your_api_key_here"
+      }
+    }
+  }
+}

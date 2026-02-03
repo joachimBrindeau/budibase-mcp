@@ -1,0 +1,59 @@
+{
+  "testSuite": {
+    "timeout": 120000,
+    "retries": 2,
+    "concurrency": 3,
+    "cleanupOnFailure": true,
+    "generateReports": true
+  },
+  "performance": {
+    "batchSizes": [1, 5, 10, 25, 50],
+    "recordCounts": [1, 10, 50, 100, 500],
+    "queryLimits": [10, 50, 100, 500],
+    "measureLatency": true,
+    "measureThroughput": true
+  },
+  "dataGeneration": {
+    "defaultRecordCount": 100,
+    "maxRecordCount": 1000,
+    "tableSchemas": {
+      "simple": {
+        "name": { "type": "string", "name": "name" },
+        "value": { "type": "number", "name": "value" },
+        "active": { "type": "boolean", "name": "active" }
+      },
+      "complex": {
+        "name": { "type": "string", "name": "name" },
+        "description": { "type": "string", "name": "description" },
+        "value": { "type": "number", "name": "value" },
+        "price": { "type": "number", "name": "price" },
+        "active": { "type": "boolean", "name": "active" },
+        "category": { "type": "string", "name": "category" },
+        "created_date": { "type": "datetime", "name": "created_date" },
+        "updated_date": { "type": "datetime", "name": "updated_date" }
+      }
+    }
+  },
+  "edgeCases": {
+    "testEmptyValues": true,
+    "testNullValues": true,
+    "testLargeStrings": true,
+    "testSpecialCharacters": true,
+    "testUnicodeCharacters": true,
+    "testNumericLimits": true
+  },
+  "security": {
+    "testSqlInjection": true,
+    "testXssAttempts": true,
+    "testCodeInjection": true,
+    "testPathTraversal": true,
+    "testDataValidation": true
+  },
+  "errorHandling": {
+    "testInvalidIds": true,
+    "testMissingFields": true,
+    "testInvalidFormats": true,
+    "testRateLimit": false,
+    "testNetworkFailure": false
+  }
+}

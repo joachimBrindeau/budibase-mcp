@@ -1,0 +1,38 @@
+{
+  "emptyStrings": {
+    "name": "",
+    "description": "",
+    "value": 0,
+    "active": false
+  },
+  "nullValues": {
+    "name": null,
+    "description": null,
+    "value": null,
+    "active": null
+  },
+  "extremeValues": {
+    "name": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "description": "occaecat duis commodo id voluptate in culpa incididunt magna ea officia non velit culpa ad ad et exercitation id ullamco nisi sint veniam esse id aute amet dolor consequat culpa commodo quis consequat sint aliqua laborum culpa mollit nostrud nisi commodo et non sint ut id ut id do proident enim elit est nulla est sed lorem excepteur ipsum enim id velit nisi exercitation qui dolor ut cillum aliquip ut nulla ea consequat id aute excepteur aliqua exercitation ipsum eiusmod sed proident consectetur fugiat consequat qui tempor laboris labore quis laboris culpa ad tempor fugiat adipiscing esse fugiat pariatur culpa fugiat aute sunt incididunt ullamco lorem ea minim fugiat aliquip consectetur sint nostrud duis magna ipsum ex occaecat quis incididunt ut id sit sint aliqua aliquip duis pariatur qui officia magna non tempor et commodo in cupidatat veniam do ut consectetur in sed laborum laboris officia ex consequat sed elit amet excepteur est anim sed magna est exercitation laboris culpa culpa eiusmod culpa laboris culpa lorem excepteur fugiat nulla ad aliquip mollit nostrud reprehenderit id culpa ullamco lorem voluptate ut elit fugiat mollit velit aliquip esse esse ex laborum ipsum incididunt duis elit ad exercitation esse ad aliqua pariatur culpa quis consequat ex veniam est sit velit incididunt occaecat dolor ut labore sed tempor id elit est nisi fugiat excepteur voluptate aute lorem sed in voluptate labore eiusmod velit quis sunt do nisi lorem mollit velit deserunt in deserunt ullamco quis sunt minim et dolore ex irure irure mollit velit reprehenderit ad elit pariatur consequat ullamco laboris velit culpa officia enim ad minim mollit dolore incididunt fugiat proident sit consectetur aliqua consequat dolore aliqua id pariatur consectetur laboris laborum exercitation mollit enim consequat minim consectetur incididunt labore mollit sunt ullamco esse quis ipsum anim culpa culpa commodo anim labore voluptate veniam minim consectetur veniam magna aute sunt quis est laborum ut aute enim qui nisi incididunt dolor duis sint qui aute ea sit proident ut mollit ullamco duis amet dolore commodo ipsum consequat dolor do et ad consequat deserunt id mollit do laborum nisi exercitation sit elit in non aliqua ut elit irure consectetur lorem cillum minim elit lorem sunt nisi esse ad labore laborum occaecat nostrud quis mollit laborum veniam anim esse voluptate quis cupidatat ex id sit ullamco ipsum exercitation ullamco aliqua commodo enim in consectetur voluptate nulla culpa id sed enim ad tempor est cillum occaecat qui id in amet ut aute nostrud do consequat pariatur incididunt ea culpa id proident anim amet tempor amet ullamco proident mollit pariatur officia cupidatat commodo tempor est reprehenderit fugiat deserunt ut veniam minim laboris sint mollit esse nulla aliqua laborum non exercitation ipsum occaecat enim dolore minim adipiscing magna mollit consectetur dolor incididunt quis ad id enim aliqua ullamco qui deserunt aliqua aliqua adipiscing tempor qui exercitation reprehenderit ullamco excepteur id labore sed excepteur laborum cupidatat do irure anim mollit quis amet occaecat voluptate sed dolore reprehenderit ut magna excepteur veniam duis eiusmod ea veniam adipiscing ipsum eiusmod sit in",
+    "value": 9007199254740991,
+    "active": true
+  },
+  "specialCharacters": {
+    "name": "Test with special chars: !@#$%^&*()_+-=[]{}|;':\",./<>?",
+    "description": "Unicode test: 你好 مرحبا здравствуй こんにちは 🎉🚀💻",
+    "value": -999999,
+    "active": false
+  },
+  "sqlInjection": {
+    "name": "'; DROP TABLE users; --",
+    "description": "1' OR '1'='1",
+    "value": 0,
+    "active": true
+  },
+  "xssAttempt": {
+    "name": "<script>alert('xss')</script>",
+    "description": "<img src=x onerror=alert('xss')>",
+    "value": 123,
+    "active": true
+  }
+}
