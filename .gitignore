@@ -56,3 +56,7 @@ temp/
 # Claude Desktop config (contains sensitive data)
 claude-desktop-config.json
 .mcp.json
+
+# Knowledge files (instance-specific IDs)
+.claude/skills/budibase/knowledge/*.yaml
+.claude/skills/budibase/knowledge/*/
